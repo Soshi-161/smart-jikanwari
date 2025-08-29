@@ -503,8 +503,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const buildShareUrl = () => {
-        const text = rawDataEl.value;
-        const data64 = encodeURIComponent(btoa(encodeURIComponent(text)));
+        const text = rawDataEl.value || '';
+        // Compress then Base64 encode
+        let b64;
+        try {
+            b64 = (typeof LZString !== 'undefined' && LZString.compressToBase64)
+                ? LZString.compressToBase64(text)
+                : btoa(encodeURIComponent(text));
+        } catch (_) {
+            // Fallback to legacy encoding if compression fails
+            b64 = btoa(encodeURIComponent(text));
+        }
+        const data64 = encodeURIComponent(b64);
         const u = new URL(window.location.href);
         u.search = '';
         u.hash = '';
@@ -553,12 +563,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else if (params.has('data64')) {
                     const b64 = decodeURIComponent(params.get('data64'));
-                    const uriEncoded = atob(b64);
-                    const decoded = decodeURIComponent(uriEncoded);
-                    if (decoded.length <= 100000) {
-                        rawDataEl.value = decoded;
-                    } else {
-                        console.warn('データが大きすぎます（上限100KB）。読込をスキップしました。');
+                    let decoded = '';
+                    let loaded = false;
+                    // Try compressed Base64 first
+                    try {
+                        if (typeof LZString !== 'undefined' && LZString.decompressFromBase64) {
+                            const decomp = LZString.decompressFromBase64(b64);
+                            if (typeof decomp === 'string') {
+                                decoded = decomp;
+                                loaded = true;
+                            }
+                        }
+                    } catch (e) {
+                        // Ignore and try legacy path
+                    }
+                    // Legacy fallback: base64 of encodeURIComponent(text)
+                    if (!loaded) {
+                        try {
+                            const uriEncoded = atob(b64);
+                            decoded = decodeURIComponent(uriEncoded);
+                            loaded = true;
+                        } catch (e) {
+                            console.warn('旧形式データのデコードにも失敗:', e);
+                        }
+                    }
+                    if (loaded) {
+                        if (decoded.length <= 100000) {
+                            rawDataEl.value = decoded;
+                        } else {
+                            console.warn('データが大きすぎます（上限100KB）。読込をスキップしました。');
+                        }
                     }
                 }
             } catch (e) {
