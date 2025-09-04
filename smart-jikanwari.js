@@ -91,11 +91,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const grade = parts[0];
             const studentName = parts[1];
-
-
-            let subject = ''
-            let lessonType = ''
-            if (separateVideoEtc) {
+            
+            let subject = '';
+            let lessonType = '';
+            if (separateVideoEtc.checked) {
                 subject = parts[2];
                 lessonType = lessonTypeMap[parts[3]];
                 if (!lessonType) {
@@ -393,13 +392,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     slots[i] = byStudent.get(s);
                     used.add(s); // slots[]に入れたらused[]に記録する
                 }
-            };
+            }
             
             // まだslots[]にいれてないものを空いているindexでいれる
             for (const [s, it] of byStudent.entries()) {
                 if (used.has(s)) continue;
                 
-                for (let idx in prevSlots) {
+                for (let idx = 0; idx < prevSlots.length; idx++) {
                     if (!slots[idx]) {
                         slots[idx] = it;
                         used.add(s);
@@ -791,6 +790,10 @@ document.addEventListener('DOMContentLoaded', () => {
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
         showTagsCheckbox.addEventListener('change', () => setView(currentView));
+        separateVideoEtc.addEventListener('change', () => {
+           scheduleData = parseRawData(rawDataEl.value);
+           setView(currentView);
+        });
         if (zoomSelect) {
             zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
         }
