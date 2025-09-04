@@ -91,17 +91,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const grade = parts[0];
             const studentName = parts[1];
-            
+
+
+            let subject = ''
+            let lessonType = ''
             if (separateVideoEtc) {
-                let subject = parts[2];
-                let lessonType = lessonTypeMap[parts[3]];
+                subject = parts[2];
+                lessonType = lessonTypeMap[parts[3]];
                 if (!lessonType) {
                     subject = subject + ' ' + parts[3];
                     lessonType = 'その他';
                 }
             } else {
-                let subject = parts[2] + ' ' + parts[3];
-                let lessonType = '映像・学トレなど';
+                subject = parts[2] + ' ' + parts[3];
+                lessonType = '映像・学トレなど';
             }
             
             let j = 4;
