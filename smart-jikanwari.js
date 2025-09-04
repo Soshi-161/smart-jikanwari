@@ -1,5 +1,5 @@
-// NOTE: Copied from app.js on rename to keep functionality.
-// Minor tweaks: download filename prefix uses "smart_jikanwari" instead of generic.
+// Re-export: keep same code as app.js but with product naming tweaks
+// If you maintain only this file, you can delete app.js
 
 document.addEventListener('DOMContentLoaded', () => {
     const rawDataEl = document.getElementById('rawData');
@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
-    
     
     let scheduleData = [];
     let currentView = 'table';
