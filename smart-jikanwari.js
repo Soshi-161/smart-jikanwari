@@ -46,19 +46,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
         const isGradeLine = (s) => /^(小|中|高)/.test(s);
-        const subjectSet = new Set(['国語','算数','英語','数学','理科','社会']);
         const parseVideoStudent = (line) => {
+            // New rule: Always interpret as [学年][生徒氏名][科目名1][科目名2][タグ...]
+            // Accept any subject tokens, including "指定なし" or other exceptional values.
             const parts = line.trim().split(/\s+/).filter(Boolean);
-            if (parts.length < 3) return null;
+            if (parts.length < 2) return null; // Need at least grade and student name
             const grade = parts[0];
-            let j = 1;
-            while (j < parts.length && !subjectSet.has(parts[j])) j++;
-            if (j >= parts.length) return null;
-            const studentName = parts.slice(1, j).join(' ');
-            const subject1 = parts[j] || '';
-            const subject2 = parts[j + 1] || '';
+            const studentName = parts[1];
+            const subject1 = parts[2] || 'その他';
+            const subject2 = parts[3] || '';
             const subject = (subject1 + ' ' + subject2).trim();
-            const tags = parts.slice(j + 2).filter(Boolean);
+            const tags = parts.slice(4).filter(Boolean);
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
             return {
                 '生徒情報': `${studentName} (${grade})`,
