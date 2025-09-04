@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveImageButton = document.getElementById('saveImageButton');
     const shareButton = document.getElementById('shareButton');
     const showTagsCheckbox = document.getElementById('showTagsCheckbox');
+    const separateVideoEtc = document.getElementById('separateVideoEtc');
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    const lessonTypeMap = {'学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力', '自': '自習', '_': 'その他'};
+    const lessonTypeMap = {'学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力', '自': '自習', '_': 'その他', '__': '映像・学トレなど'};
     
     /**********************************
      文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isVideo = false; // true: 映像・学トレなど false: 個別授業
         let currentTimeslot = '不明'; // 時限
         let currentTime = '不明'; // 時限の時刻範囲
+        videoInstructorByTimeslot = new Map(); // 初期化
         
         const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
         const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s); // e.g. 13:30 〜 14:30
@@ -90,11 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const grade = parts[0];
             const studentName = parts[1];
             
-            let subject = parts[2];
-            let lessonType = lessonTypeMap[parts[3]];
-            if (!lessonType) {
-                subject = subject + ' ' + parts[3];
-                lessonType = 'その他';
+            if (separateVideoEtc) {
+                let subject = parts[2];
+                let lessonType = lessonTypeMap[parts[3]];
+                if (!lessonType) {
+                    subject = subject + ' ' + parts[3];
+                    lessonType = 'その他';
+                }
+            } else {
+                let subject = parts[2] + ' ' + parts[3];
+                let lessonType = '映像・学トレなど';
             }
             
             let j = 4;
