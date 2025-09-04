@@ -15,12 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveImageButton = document.getElementById('saveImageButton');
     const shareButton = document.getElementById('shareButton');
     const showTagsCheckbox = document.getElementById('showTagsCheckbox');
+    const zoomSelect = document.getElementById('zoomSelect');
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
 
     let scheduleData = [];
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
     let videoInstructorByTimeslot = new Map();
+    let currentZoom = 1;
+    const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
     const escapeHTML = (str) => {
         if (str === null || str === undefined) return '';
@@ -339,8 +344,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             tableHtml += '</tbody></table></div>';
         }
-        tableContainer.innerHTML = tableHtml;
-        applyHighlight();
+    tableContainer.innerHTML = tableHtml;
+    applyHighlight();
+    // Re-apply zoom after rerender
+    applyZoom(currentZoom);
     };
 
     const clearHighlight = () => {
@@ -437,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableViewBtn.classList.add('active');
             cardViewBtn.classList.remove('active');
             renderTableView();
+            applyZoom(currentZoom);
         } else {
             tableContainer.style.display = 'none';
             cardContainer.style.display = 'block';
@@ -456,6 +464,9 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('テーブルがありません。元データをご確認ください。');
             return;
         }
+        // Temporarily reset zoom to 100% for export
+        const prevZoom = target.style.zoom;
+        target.style.zoom = '1';
         if (wasHidden) {
             target.style.visibility = 'hidden';
             target.style.display = 'block';
@@ -495,9 +506,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 target.style.display = prevDisplay || 'none';
                 setView(currentView);
             }
+            // Restore zoom
+            target.style.zoom = prevZoom;
             saveImageButton.disabled = false;
             saveImageButton.innerHTML = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z\"/><path d=\"M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z\"/></svg> 画像として保存`;
         });
+    };
+
+    const applyZoom = (scale) => {
+        if (typeof scale !== 'number' || !isFinite(scale)) return;
+        currentZoom = Math.min(Math.max(scale, allowedZooms[0]), allowedZooms[allowedZooms.length - 1]);
+        // Use CSS zoom to scale layout without extra scroll space
+        tableContainer.style.zoom = String(currentZoom);
+        if (zoomSelect) {
+            // Snap select to closest allowed value
+            let closest = allowedZooms[0];
+            let diff = Math.abs(currentZoom - closest);
+            for (const z of allowedZooms) {
+                const d = Math.abs(currentZoom - z);
+                if (d < diff) { diff = d; closest = z; }
+            }
+            zoomSelect.value = String(closest);
+        }
+    };
+
+    const zoomStep = (dir) => {
+        const idx = allowedZooms.indexOf(Number(zoomSelect?.value || currentZoom));
+        if (idx === -1) return applyZoom(currentZoom);
+        const nextIdx = dir > 0 ? Math.min(idx + 1, allowedZooms.length - 1) : Math.max(idx - 1, 0);
+        applyZoom(allowedZooms[nextIdx]);
     };
 
     const buildShareUrl = () => {
@@ -631,6 +668,11 @@ document.addEventListener('DOMContentLoaded', () => {
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
         showTagsCheckbox.addEventListener('change', () => setView(currentView));
+        if (zoomSelect) {
+            zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
+        }
+        if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
+        if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });
         tableContainer.addEventListener('click', (e) => {
             const card = e.target.closest('.class-card');
             if (!card) return;
@@ -650,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setView('card');
         } else {
             setView('table');
+            applyZoom(1);
         }
     };
 
