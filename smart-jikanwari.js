@@ -1,6 +1,9 @@
 // Re-export: keep same code as app.js but with product naming tweaks
 // If you maintain only this file, you can delete app.js
 
+// NOTE: Copied from app.js on rename to keep functionality.
+// Minor tweaks: download filename prefix uses "smart_jikanwari" instead of generic.
+
 document.addEventListener('DOMContentLoaded', () => {
     const rawDataEl = document.getElementById('rawData');
     const rowSelector = document.getElementById('row-selector');
