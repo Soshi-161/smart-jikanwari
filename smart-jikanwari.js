@@ -15,107 +15,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveImageButton = document.getElementById('saveImageButton');
     const shareButton = document.getElementById('shareButton');
     const showTagsCheckbox = document.getElementById('showTagsCheckbox');
+    const separateVideoEtc = document.getElementById('separateVideoEtc');
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
-    const noticeArea = document.getElementById('notice-area');
-    const noticeText = document.getElementById('notice-text');
-    const panelToggleBtn = document.getElementById('panelToggleBtn');
-    const panelBody = document.getElementById('panel-body');
-    const clearDataButton = document.getElementById('clearDataButton');
-    const clearPopover = document.getElementById('clearPopover');
-    const clearCancelBtn = document.getElementById('clearCancelBtn');
-    const clearConfirmBtn = document.getElementById('clearConfirmBtn');
-
+    
     let scheduleData = [];
+    let additionalScheduleData = [];
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    const ICON_TYPES = new Set(['出席','欠席','追加受講','振替','SNET振替','講習会','マンツーマン','有効時限']);
-    const showAttendanceCheckbox = document.getElementById('showAttendanceCheckbox');
-
-    // Known one-letter flags that may appear alongside tags
-    const KNOWN_TAG_OR_FLAGS = new Set([...ICON_TYPES, '個', '映', '学', '閃']);
-
-    const collectUnknownTags = (data) => {
-        const unknown = new Set();
-        if (!Array.isArray(data)) return [];
-        data.forEach(item => {
-            const raw = (item && item['タグ']) ? String(item['タグ']) : '';
-            if (!raw) return;
-            raw.split(/\s+/).filter(Boolean).forEach(tok => {
-                if (!KNOWN_TAG_OR_FLAGS.has(tok)) unknown.add(tok);
-            });
-        });
-        return Array.from(unknown);
-    };
-
-    const updateNotice = () => {
-        if (!noticeArea || !noticeText) return;
-        const list = collectUnknownTags(scheduleData);
-        if (list.length > 0) {
-            const shown = list.slice(0, 10);
-            const more = list.length - shown.length;
-            const msg = more > 0
-                ? `未定義のタグがあります: ${shown.join('、')} …（ほか ${more} 件）`
-                : `未定義のタグがあります: ${shown.join('、')}`;
-            noticeText.textContent = msg;
-            noticeArea.classList.remove('hidden');
-        } else {
-            noticeText.textContent = '';
-            noticeArea.classList.add('hidden');
-        }
-    };
-
-    const positionClearPopover = () => {
-        if (!clearPopover || !clearDataButton || clearPopover.classList.contains('hidden')) return;
-        const rect = clearDataButton.getBoundingClientRect();
-        // Make visible but hidden to measure
-        const prevVis = clearPopover.style.visibility;
-        clearPopover.style.visibility = 'hidden';
-        // Ensure it's rendered for measurement
-        const prevHidden = clearPopover.classList.contains('hidden');
-        if (prevHidden) clearPopover.classList.remove('hidden');
-        const vpW = window.innerWidth;
-        const vpH = window.innerHeight;
-        const margin = 8;
-        // Constrain max width to viewport width minus margins
-        const maxW = Math.max(160, vpW - margin * 2);
-        clearPopover.style.maxWidth = `${maxW}px`;
-        // Measure after applying max-width
-        const popW = clearPopover.offsetWidth;
-        const popH = clearPopover.offsetHeight;
-        let left = rect.left; // fixed position uses viewport coords
-        let top = rect.bottom + margin;
-        // Horizontal clamp with margin
-        if (left + popW > vpW - margin) {
-            // Try aligning right edge of popover to right edge of button first
-            left = Math.max(margin, Math.min(vpW - popW - margin, rect.right - popW));
-        }
-        left = Math.max(margin, left);
-        // Prefer below; if overflow bottom, try above, else clamp
-        if (top + popH > vpH - margin) {
-            const above = rect.top - popH - margin;
-            top = above >= margin ? above : Math.max(margin, vpH - popH - margin);
-        }
-        clearPopover.style.left = `${left}px`;
-        clearPopover.style.top = `${top}px`;
-        // Restore visibility
-        clearPopover.style.visibility = prevVis || '';
-    };
-    const showClearPopover = () => {
-        if (!clearPopover || !clearDataButton) return;
-        clearPopover.classList.remove('hidden');
-        positionClearPopover();
-    };
-    const hideClearPopover = () => {
-        if (!clearPopover) return;
-        clearPopover.classList.add('hidden');
-    };
-
+    
+    /**********************************
+     文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
+    ***********************************/
     const escapeHTML = (str) => {
         if (str === null || str === undefined) return '';
         return String(str)
@@ -126,133 +42,221 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#39;')
             .replace(/`/g, '&#96;');
     };
-
+    
+    /**********************************
+     生のテキストを受け取り、オブジェクトに変換して返す。オブジェクトの形式は
+        {
+            '生徒情報': 生徒氏名（学年）,
+            '時限（時間）': 時限（時間）,
+            '教科': 教科,
+            '講師': 講師名または授業種別,
+            'タグ': アイコンなど,
+            'メモ': メモ欄,
+            '学年': 生徒の学年,
+        }
+    ***********************************/
     const parseRawData = (text) => {
-        // Remove blank/whitespace-only lines before interpretation (handles CRLF too)
-        const lines = text
-            .split('\n')
-            .map(l => l.replace(/\r/g, ''))
-            .filter(l => l.trim().length > 0);
+        const lines = text.trim().split('\n'); // 受け取った文字列を行で分割した配列 cf. String.prototype.trim(), String.prototype.split()
         const schedule = [];
-        let currentTimeslot = '', currentTime = '';
-        let mode = 'unknown';
-        videoInstructorByTimeslot = new Map();
-
-        const isTimeslotLetter = (s) => /^[A-Z]$/.test(s);
-        const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s);
-        const isHeader = (s) => s.startsWith('時限');
+        const additionalSchedule = [];
+        let currentTimeslot = '不明'; // 時限
+        let currentTime = '不明'; // 時限の時刻範囲
+        let mode = 'unknown'; // video: 映像・学トレなど, individual: 個別授業, additional: 追記
+        videoInstructorByTimeslot = new Map(); // 初期化
+        
+        const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
+        const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s); // e.g. 13:30 〜 14:30
+        const isHeader = (s) => s.startsWith('時限'); // 時限    学年    生徒氏名    教科名    ｱｲｺﾝ …… cf. String.prototype.startsWith()
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
-        const isGradeLine = (s) => /^(小|中|高)/.test(s);
+        const isAdditional = (s) => (s == '追記');
+        const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
+        
+        const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効時限', '重要'];
+        
         const parseVideoStudent = (line) => {
-            // New rule: [学年][生徒氏名][科目名1][科目名2][タグ?][メモ...]
-            const parts = line.trim().split(/\s+/).filter(Boolean);
-            if (parts.length < 2) return null; // Need at least grade and student name
+            const timeslotInfo = `${currentTimeslot}（${currentTime}）`; // 時限
+            
+            const parts = line.trim().split(/\s+/).filter(Boolean); // 受け取った文字列の両端の空白を取り除き、空白で区切り、falsyなもの（空文字列）を取り除いた配列をpartsに入れる cf. Array.prototype.filter()
+            
+            if (parts.length < 4) { // partsの要素は4以上とする e.g. 中１    個別二俣川太郎    英語 学    振替
+                return { // 想定外の入力でも何かしら返す
+                    '生徒情報': `${line}`,
+                    '時限（時間）': timeslotInfo,
+                    '教科': '',
+                    '講師': 'その他',
+                    'タグ': '',
+                    'メモ': '',
+                    '学年': '',
+                };
+            }
+            
             const grade = parts[0];
             const studentName = parts[1];
-            const subject1 = parts[2] || '';
-            const subject2 = parts[3] || '';
-            // Display order swapped: subject2 first, then subject1
-            const subject = (subject2 + ' ' + subject1).trim();
-            // Split remaining tokens: leading ICON_TYPES are tags, the rest join as memo
-            const rest = parts.slice(4);
-            const tagTokens = [];
-            let memoTokens = [];
-            for (let i = 0; i < rest.length; i++) {
-                const tk = rest[i];
-                if (ICON_TYPES.has(tk) && memoTokens.length === 0) {
-                    tagTokens.push(tk);
+            
+            let subject = '';
+            let lessonType = '';
+            if (separateVideoEtc.checked) {
+                lessonType = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '力シリーズ', '読': '力シリーズ', '閃': '力シリーズ', R: '力シリーズ'}[parts[3]] || 'その他';
+            } else {
+                lessonType = '映像・学トレなど';
+            }
+            subject = parts[2] || '';
+            if ( ['力シリーズ', 'その他', '映像・学トレなど'].indexOf(lessonType) >= 0) {
+                const subject2 = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力'}[parts[3]] || parts[3];
+                if (subject == '指定なし') {
+                    subject = subject2;
                 } else {
-                    memoTokens = rest.slice(i);
-                    break;
+                    subject = subject + ' ' + subject2;
                 }
             }
-            const tags = tagTokens;
-            const memo = memoTokens.join(' ');
-            const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
+            
+            let j = 4;
+            while (j < parts.length && knownIcons.indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
+            const icons = parts.slice(4, j).filter(Boolean);
+            const memo  = parts.slice(j).filter(Boolean);
+            
             return {
-                '生徒情報': `${studentName} (${grade})`,
+                '生徒情報': `${studentName}（${grade}）`,
                 '時限（時間）': timeslotInfo,
                 '教科': subject,
-                '講師': '映像・学トレなど',
-                'タグ': tags.join(' '),
-                'メモ': memo,
+                '講師': lessonType,
+                'タグ': icons.join(' '),
+                'メモ': memo.join(' '),
                 '学年': grade,
             };
         };
-
+        
+        const parseIndividualStudent = (line1, line2, line3) => {
+            const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
+            
+            const line1Parts = line1.trim().split(/\s+/).filter(p => p); // 学年と生徒氏名
+            const line2Parts = line2.trim().split(/\s+/).filter(p => p); // 科目と「個」（とアイコン）
+            const line3Parts = line3.trim().split(/\s+/).filter(p => p); // アイコンと講師とメモ
+            
+            if (line1Parts.length != 2) { // line1には学年と生徒氏名が必要
+                return { // 想定外の入力でも何かしら返す
+                    '生徒情報': `${line1} ${line2} ${line3}`,
+                    '時限（時間）': timeslotInfo,
+                    '教科': '',
+                    '講師': '個別 その他',
+                    'タグ': '',
+                    'メモ': '',
+                    '学年': '',
+                };
+            }
+            
+            const grade = line1Parts[0];
+            const studentName = line1Parts[1];
+            
+            const subject = line2Parts[0] || '';
+            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個'); // 「個」は無視する
+            
+            let j = 0;
+            while (j < line3Parts.length && knownIcons.indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
+            const iconsFromLine3 = line3Parts.slice(0, j).filter(Boolean);
+            const instructor = line3Parts[j] || '個別 その他';
+            const memo  = line3Parts.slice(j+1).filter(Boolean);
+            
+            return {
+                '生徒情報': `${studentName}（${grade}）`,
+                '時限（時間）': timeslotInfo,
+                '教科': subject,
+                '講師': instructor,
+                'タグ': [...iconsFromLine2, ...iconsFromLine3].join(' '),
+                'メモ': memo.join(' '),
+                '学年': grade,
+            };
+        };
+        
         for (let i = 0; i < lines.length; i++) {
-            const raw = lines[i];
-            const trimmedLine = raw.trim();
+            const trimmedLine= lines[i].trim();
             if (!trimmedLine) continue;
+            
             if (isSectionVideo(trimmedLine)) { mode = 'video'; currentTimeslot=''; currentTime=''; continue; }
             if (isSectionIndividual(trimmedLine)) { mode = 'individual'; currentTimeslot=''; currentTime=''; continue; }
+            if (isAdditional(trimmedLine)) { mode = 'additional'; currentTimeslot=''; currentTime=''; continue; }
             if (isHeader(trimmedLine)) continue;
-
+            
             if (isTimeslotLetter(trimmedLine)) { currentTimeslot = trimmedLine; continue; }
             if (isTimeRange(trimmedLine)) { currentTime = trimmedLine; continue; }
-
-            if (mode === 'video') {
-                if (!isGradeLine(trimmedLine) && !isTimeslotLetter(trimmedLine) && !isTimeRange(trimmedLine)) {
-                    if (currentTimeslot && currentTime) {
-                        if (!(trimmedLine.startsWith('{') && trimmedLine.endsWith('}'))) {
-                            const key = `${currentTimeslot}（${currentTime}）`;
-                            if (!videoInstructorByTimeslot.has(key)) videoInstructorByTimeslot.set(key, trimmedLine);
-                        }
-                    }
-                    continue;
-                }
-                if (isGradeLine(trimmedLine)) {
+            
+            if (mode == 'video') { // 映像・学トレなど
+                if (isStudentLine(trimmedLine)) { // 生徒: parseVideoStudent()でオブジェクトに整形し、schedule[]にいれる
                     const rec = parseVideoStudent(trimmedLine);
                     if (rec) schedule.push(rec);
+                } else if ( !(trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) ) { // 力シリーズ担当講師
+                    const key = `${currentTimeslot}（${currentTime}）`;
+                    if (!videoInstructorByTimeslot.has(key)) videoInstructorByTimeslot.set(key, trimmedLine);
                 }
-                continue;
-            }
-
-            if (mode === 'individual') {
-                if (i + 2 < lines.length) {
-                    const line1Parts = lines[i].trim().split(/\s+/).filter(p => p);
-                    const line2Parts = lines[i + 1].trim().split(/\s+/).filter(p => p);
-                    const line3Parts = lines[i + 2].trim().split(/\s+/).filter(p => p);
-                    if (line1Parts.length >= 2 && line3Parts.length > 0) {
-                        const grade = line1Parts[0];
-                        const studentName = line1Parts.slice(1).join(' ');
-                        const studentInfo = `${studentName} (${grade})`;
-                        const subject = line2Parts[0] || '';
-                        const tagsFromLine2 = line2Parts.slice(1);
-                        let instructor = '';
-                        let memo = '';
-                        // New rule: line3 is [タグ...?][講師名][メモ...?]
-                        let splitIdx = 0;
-                        while (splitIdx < line3Parts.length && KNOWN_TAG_OR_FLAGS.has(line3Parts[splitIdx])) {
-                            splitIdx++;
-                        }
-                        const tagsFromLine3 = line3Parts.slice(0, splitIdx);
-                        instructor = line3Parts[splitIdx] || '';
-                        memo = line3Parts.slice(splitIdx + 1).join(' ');
-                        const allTags = [...tagsFromLine2, ...tagsFromLine3];
-                        const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
-                        schedule.push({
-                            '生徒情報': studentInfo,
-                            '時限（時間）': timeslotInfo,
-                            '教科': subject,
-                            '講師': instructor,
-                            'タグ': allTags.join(' '),
-                            'メモ': memo,
-                            '学年': grade,
-                        });
-                        i += 2;
-                        continue;
+            } else if (mode == 'individual') { // 個別授業
+                if (!isStudentLine(trimmedLine)) { // 学年から始まる必要がある
+                    continue; // ToDo: 想定外の入力でも何か返す
+                }
+                
+                let line1 = trimmedLine;
+                let line2 = '';
+                let line3 = '';
+                
+                // linesにまだ行があり、特殊な行でなければline2, line3に追加する
+                if (i + 1 < lines.length) {
+                    line2 = lines[i + 1].trim();
+                    if ( isTimeslotLetter(line2) || isTimeRange(line2) || isHeader(line2) || isSectionVideo(line2) || isSectionIndividual(line2) || isStudentLine(line2) ) {
+                        line2 = '';
+                    } else if (i + 2 < lines.length) {
+                        line3 = lines[i + 2].trim();
+                        if ( isTimeslotLetter(line3) || isTimeRange(line3) || isHeader(line3) || isSectionVideo(line3) || isSectionIndividual(line3) || isStudentLine(line3) ) {
+                            line3 = '';
+                        } 
                     }
                 }
-            }
-        }
-        return schedule;
+                
+                const rec = parseIndividualStudent(line1, line2, line3);
+                if (rec) schedule.push(rec);
+                
+                if (line3 != '') { // 先読みした分だけiを増やしておく
+                    i += 2;
+                } else if (line2 != '') {
+                    i += 1;
+                }
+            } else if (mode == 'additional') { // 追記
+                const timeslotMap = {A: 'A（13:30 〜 14:30）', B: 'B（14:40 〜 15:40）', C: 'C（15:50 〜 16:50）', D: 'D（17:00 〜 18:00）', E: 'E（18:10 〜 19:10）', F: 'F（19:20 〜 20:20）', G: 'G（20:30 〜 21:30）'};
+                const parts = trimmedLine.trim().split(/\s+/).filter(Boolean);
+                let currentTimeslot = '', instructor = '', content = '';
+                if (isTimeslotLetter(parts[0])) {
+                    currentTimeslot = parts[0];
+                    instructor = parts[1];
+                    content = parts.slice(2).join(' ');;
+                } else if (isTimeslotLetter(parts[1])) {
+                    currentTimeslot = parts[1];
+                    instructor = parts[0];
+                    content = parts.slice(2).join(' ');
+                }
+                
+                if (instructor != '') {
+                    additionalSchedule.push({
+                        '生徒情報': content,
+                        '時限（時間）': timeslotMap[currentTimeslot],
+                        '教科': content,
+                        '講師': instructor,
+                        'タグ': '',
+                        'メモ': '',
+                        '学年': '',
+                    });
+                }
+                
+            } // if
+        } // for
+        
+        return [schedule, additionalSchedule];
     };
-
+    
+    /**********************************
+     文字列（教科）を種にカラーコードを生成する // ToDo: 「数学」と「数学II」では違う色になる
+    ***********************************/
     const stringToColor = (str) => {
         let hash = 0;
-        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash); // cf. ビット演算
         let color = '#';
         for (let i = 0; i < 3; i++) {
             const value = (hash >> (i * 8)) & 0xFF;
@@ -260,12 +264,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return color;
     };
-
+    
+    /**********************************
+     学年の文字列を小1からの通し番号に変換する
+    ***********************************/
     const gradeToValue = (grade) => {
         if (typeof grade !== 'string' || grade.length < 2) return 0;
-        const normalizedGrade = grade.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-        const type = normalizedGrade.charAt(0);
-        const level = parseInt(normalizedGrade.slice(1), 10);
+        if (grade == '高卒') return 13;
+        const normalizedGrade = grade.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); // 全角数字を半角に
+        const type = normalizedGrade.charAt(0); // 小中高
+        const level = parseInt(normalizedGrade.slice(1), 10); // 学年の数字
         if (isNaN(level)) return 0;
         switch (type) {
             case '高': return 9 + level;
@@ -274,7 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
             default: return 0;
         }
     };
-
+    
+    /**********************************
+     テーブルのセルを生成する
+    ***********************************/
     const generateCellContent = (cellData, rowAttr, colAttr) => {
         let contentHtml = '<div class="flex flex-col gap-2">';
         cellData.forEach(item => {
@@ -299,20 +310,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const color = stringToColor(item['教科']);
-            const rawTags = (item['タグ'] || '');
-            const tagList = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
-            const filteredTagList = tagList.filter(t => {
-                if (!showTagsCheckbox.checked) return false;
-                if (showAttendanceCheckbox && !showAttendanceCheckbox.checked && (t === '出席' || t === '欠席')) return false;
-                return true;
-            });
-            const visibleTagValue = escapeHTML(filteredTagList.join(' '));
             const parts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), className: '' },
                 { key: '教科', value: escapeHTML(item['教科']), className: 'text-gray-600' },
                 { key: '講師', value: `講師: ${escapeHTML(item['講師'])}`, className: 'text-gray-600' },
                 { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), className: 'text-sm text-gray-500' },
-                { key: 'タグ', value: visibleTagValue, className: 'text-xs text-gray-400' },
+                { key: 'タグ', value: escapeHTML(item['タグ']), className: 'text-xs text-gray-400' },
             ];
             const memoText = (item['メモ'] || '').trim();
             const renderMemo = (show) => {
@@ -338,25 +341,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return contentHtml + '</div>';
     };
-
+    
     const generateCardContent = (items, rowAttr, colAttr) => {
         let contentHtml = '';
         items.forEach(item => {
             const color = stringToColor(item['教科']);
-            const rawTags2 = (item['タグ'] || '');
-            const tagList2 = rawTags2 ? rawTags2.split(/\s+/).filter(Boolean) : [];
-            const filteredTagList2 = tagList2.filter(t => {
-                if (!showTagsCheckbox.checked) return false;
-                if (showAttendanceCheckbox && !showAttendanceCheckbox.checked && (t === '出席' || t === '欠席')) return false;
-                return true;
-            });
-            const visibleTagValue2 = escapeHTML(filteredTagList2.join(' '));
             const potentialParts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
                 { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-gray-600' },
                 { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-gray-600' },
                 { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-sm text-gray-500' },
-                { key: 'タグ', value: visibleTagValue2, defaultClass: 'text-xs text-gray-400' },
+                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-xs text-gray-400' },
                 { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-xs text-red-500 font-semibold' }
             ];
             let visibleParts = potentialParts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
@@ -371,104 +366,146 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return contentHtml;
     };
-
+    
+    /**********************************
+     scheduleData[]と見出しの属性を受け取る。scheduleData[]から属性を取り出し、並び替える
+    ***********************************/
     const getHeaders = (data, attr) => {
         if (attr === '生徒情報') {
-            const uniqueStudents = Array.from(new Map(data.map(item => [item['生徒情報'], item])).values());
-            uniqueStudents.sort((a, b) => {
+            const uniqueStudents = Array.from(new Map(data.map(item => [item['生徒情報'], item])).values()); // 生徒情報のかぶりを消す
+            uniqueStudents.sort((a, b) => { // まず学年で並べ替え、次に名前で並べ替える
                 const gradeComparison = gradeToValue(b['学年']) - gradeToValue(a['学年']);
                 if (gradeComparison !== 0) return gradeComparison;
                 return a['生徒情報'].localeCompare(b['生徒情報'], 'ja');
             });
             return uniqueStudents.map(item => item['生徒情報']);
+        } else if (attr === '講師') {
+            const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
+            return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
+                if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
+                    return a.localeCompare(b, 'ja');
+                } else {
+                    return videoEtcLessonTypes.indexOf(a) - videoEtcLessonTypes.indexOf(b);
+                }
+                
+            });
         }
         return [...new Set(data.map(item => item[attr]))].sort();
     };
-
+    
+    /**********************************
+     scheduleData[]と、入力している属性から、テーブルを生成する
+    ***********************************/
     const renderTableView = () => {
         const rowAttr = rowSelector.value, colAttr = colSelector.value;
         if (!rowAttr || !colAttr || rowAttr === colAttr) {
             tableContainer.innerHTML = `<div class="p-8 text-center text-gray-500">行と列に異なる属性を選択してください。</div>`; return;
         }
-        let rowHeaders = getHeaders(scheduleData, rowAttr);
-        const colHeaders = getHeaders(scheduleData, colAttr);
+        
+        let schedule = scheduleData;
+        
+        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+            schedule = schedule.concat(additionalScheduleData);
+        }
+        
+        let rowHeaders = getHeaders(schedule, rowAttr);
+        const colHeaders = getHeaders(schedule, colAttr);
         const dataMap = new Map();
-        scheduleData.forEach(item => {
+        schedule.forEach(item => { // schedule[]からdataMap{}へ、表の形式で移す
             const rowKey = item[rowAttr], colKey = item[colAttr];
             if (!dataMap.has(rowKey)) dataMap.set(rowKey, new Map());
             if (!dataMap.get(rowKey).has(colKey)) dataMap.get(rowKey).set(colKey, []);
             dataMap.get(rowKey).get(colKey).push(item);
         });
-        if (rowAttr === '講師' && colAttr === '時限（時間）') {
-            const vlabel = '映像・学トレなど';
-            if (rowHeaders.includes(vlabel)) {
-                rowHeaders = rowHeaders.filter(h => h !== vlabel).concat([vlabel]);
-            }
-        }
-        const orderBySlots = (cellData, prevSlots) => {
+        
+        const orderBySlots = (cellData, prevSlots) => { // 連コマの生徒を横並びにする関数
             const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
-            const used = new Set();
-            const slots = [null, null];
-            [0,1].forEach(i => {
-                const s = prevSlots[i];
+            let used = new Set();
+            let slots = new Array(prevSlots.length).fill(null);
+            
+            // prevSlots[]にいる生徒がbyStudent{}（cellData[]）にもいたら、おなじindexでslots[]にいれる
+            for (let idx = 0; idx < prevSlots.length; idx++) {
+                const s = prevSlots[idx];
                 if (s && byStudent.has(s)) {
-                    slots[i] = byStudent.get(s);
-                    used.add(s);
+                    slots[idx] = byStudent.get(s);
+                    used.add(s); // slots[]に入れたらused[]に記録する
                 }
-            });
+            }
+            
+            // まだslots[]にいれてないものを空いているindexでいれる
             for (const [s, it] of byStudent.entries()) {
                 if (used.has(s)) continue;
-                const idx = slots[0] === null ? 0 : (slots[1] === null ? 1 : -1);
-                if (idx !== -1) {
-                    slots[idx] = it;
-                    used.add(s);
+                
+                for (let idx = 0; idx < prevSlots.length; idx++) {
+                    if (!slots[idx]) {
+                        slots[idx] = it;
+                        used.add(s);
+                        break;
+                    }
                 }
+                
+                if (used.has(s)) continue;
+                slots.push(it);
+                used.add(s);
             }
-            const nextPrev = [slots[0] ? slots[0]['生徒情報'] : null, slots[1] ? slots[1]['生徒情報'] : null];
+            
+            
+            const nextPrev = slots.map(it => it ? it['生徒情報'] : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
             return { slots, nextPrev };
         };
+        
         let tableHtml = '<div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-gray-500">';
-        tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} \\ ${escapeHTML(colAttr)}</th>`;
-        colHeaders.forEach(h => {
+        tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
+        colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
-            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap sticky\" data-timeslot-col=\"${eh}\">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
+        
         rowHeaders.forEach(rowH => {
+            // 右の見出し
             const erow = escapeHTML(rowH);
             tableHtml += `<tr class=\"bg-white border-b hover:bg-gray-50\"><th scope=\"row\" class=\"py-3 px-4 font-bold text-gray-900 whitespace-nowrap bg-white border-r sticky left-0 z-10\" data-row-key=\"${erow}\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">${erow}</th>`;
-            let prevSlots = [null, null];
+            
+            // セル
+            let prevSlots = [];
             colHeaders.forEach(colH => {
                 const cellData = dataMap.get(rowH)?.get(colH);
                 let toRender = cellData;
-                if (cellData && rowAttr === '講師' && colAttr === '時限（時間）' && rowH !== '映像・学トレなど') {
+                if ( cellData && rowAttr === '講師' && colAttr === '時限（時間）') {
                     const { slots, nextPrev } = orderBySlots(cellData, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
-                }
+                } // 連コマの生徒は横並びになるようにする
                 tableHtml += `<td class=\"py-2 px-2 align-top min-w-[200px]\" data-timeslot-col=\"${escapeHTML(colH)}\" data-row-key=\"${erow}\">`;
                 if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
+            
             tableHtml += `</tr>`;
         });
-        if (rowAttr === '講師' && colAttr === '時限（時間）') {
-            tableHtml += '</tbody><tfoot>';
+        
+        if (colAttr === '時限（時間）') { // 力シリーズ担当講師
             tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
                 tableHtml += `<td class=\"py-2 px-2 text-sm text-gray-700\">${escapeHTML(name)}</td>`;
             });
-            tableHtml += `</tr></tfoot></table></div>`;
-        } else {
-            tableHtml += '</tbody></table></div>';
         }
-    tableContainer.innerHTML = tableHtml;
-    applyHighlight();
-    // Re-apply zoom after rerender
-    applyZoom(currentZoom);
+        
+        tableHtml += `</tbody><tfoot class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
+        colHeaders.forEach(h => { // 下の見出し
+            const eh = escapeHTML(h);
+            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+        });
+        tableHtml += `</tr></tfoot></table></div>`;
+        
+        tableContainer.innerHTML = tableHtml;
+        applyHighlight();
+        // Re-apply zoom after rerender
+        applyZoom(currentZoom);
     };
-
+    
     const clearHighlight = () => {
         tableContainer.querySelectorAll('[data-timeslot-col].col-highlight').forEach(el => {
             el.classList.remove('col-highlight');
@@ -765,13 +802,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         loadFromQuery();
-        scheduleData = parseRawData(rawDataEl.value);
+        [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
         if (scheduleData.length === 0) {
             tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
             return;
         }
-    // Initial unknown-tag notice
-    updateNotice();
         const attributes = scheduleData.length > 0 ? Object.keys(scheduleData[0]).filter(key => key !== '学年') : [];
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
@@ -782,11 +817,10 @@ document.addEventListener('DOMContentLoaded', () => {
             rowSelector.value = '講師';
             colSelector.value = '時限（時間）';
         }
-          rawDataEl.addEventListener('input', () => {
-              scheduleData = parseRawData(rawDataEl.value);
-              updateNotice();
-              setView(currentView);
-          });
+        rawDataEl.addEventListener('input', () => {
+           [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
+           setView(currentView);
+        });
         rowSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
@@ -799,114 +833,11 @@ document.addEventListener('DOMContentLoaded', () => {
         cardViewBtn.addEventListener('click', () => setView('card'));
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
-        if (panelToggleBtn && panelBody) {
-            const collapse = (el) => {
-                const cs = getComputedStyle(el);
-                const pt = cs.paddingTop;
-                const pb = cs.paddingBottom;
-                el.dataset.pt = pt;
-                el.dataset.pb = pb;
-                el.style.boxSizing = 'border-box';
-                el.style.height = el.scrollHeight + 'px';
-                el.style.opacity = '1';
-                // Force reflow
-                void el.offsetHeight;
-                el.style.transition = 'height 250ms ease, opacity 200ms ease, padding 250ms ease';
-                el.style.paddingTop = '0px';
-                el.style.paddingBottom = '0px';
-                el.style.height = '0px';
-                el.style.opacity = '0';
-                const onEnd = (ev) => {
-                    if (ev.target !== el) return;
-                    el.removeEventListener('transitionend', onEnd);
-                    el.classList.add('hidden');
-                    el.style.transition = '';
-                    el.style.height = '';
-                    el.style.opacity = '';
-                    el.style.paddingTop = '';
-                    el.style.paddingBottom = '';
-                    el.style.boxSizing = '';
-                };
-                el.addEventListener('transitionend', onEnd);
-            };
-            const expand = (el) => {
-                const pt = el.dataset.pt || getComputedStyle(el).paddingTop;
-                const pb = el.dataset.pb || getComputedStyle(el).paddingBottom;
-                el.classList.remove('hidden');
-                el.style.boxSizing = 'border-box';
-                el.style.height = '0px';
-                el.style.opacity = '0';
-                el.style.paddingTop = '0px';
-                el.style.paddingBottom = '0px';
-                // Force reflow
-                void el.offsetHeight;
-                el.style.transition = 'height 250ms ease, opacity 200ms ease, padding 250ms ease';
-                el.style.height = el.scrollHeight + 'px';
-                el.style.paddingTop = pt;
-                el.style.paddingBottom = pb;
-                el.style.opacity = '1';
-                const onEnd = (ev) => {
-                    if (ev.target !== el) return;
-                    el.removeEventListener('transitionend', onEnd);
-                    el.style.transition = '';
-                    el.style.height = '';
-                    el.style.opacity = '';
-                    el.style.paddingTop = '';
-                    el.style.paddingBottom = '';
-                    el.style.boxSizing = '';
-                    delete el.dataset.pt;
-                    delete el.dataset.pb;
-                };
-                el.addEventListener('transitionend', onEnd);
-            };
-            panelToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const expanded = panelToggleBtn.getAttribute('aria-expanded') === 'true';
-                panelToggleBtn.setAttribute('aria-expanded', String(!expanded));
-                if (expanded) {
-                    collapse(panelBody);
-                    panelToggleBtn.textContent = '展開する';
-                } else {
-                    expand(panelBody);
-                    panelToggleBtn.textContent = '折りたたむ';
-                }
-            });
-        }
-        if (clearDataButton) {
-            clearDataButton.addEventListener('click', (e) => {
-                e.preventDefault();
-                showClearPopover();
-            });
-        }
-        if (clearCancelBtn) {
-            clearCancelBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                hideClearPopover();
-            });
-        }
-        if (clearConfirmBtn) {
-            clearConfirmBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                hideClearPopover();
-                // Clear the data and update everything
-                rawDataEl.value = '';
-                scheduleData = parseRawData('');
-                updateNotice();
-                // Re-render views with empty state
-                tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
-                cardContainer.innerHTML = '';
-            });
-        }
-        const syncAttendanceToggle = () => {
-            if (showAttendanceCheckbox) {
-                const enabled = showTagsCheckbox.checked;
-                showAttendanceCheckbox.disabled = !enabled;
-                // If disabled, leave its checked state as-is; filtering will ignore it when disabled because showTags is false
-            }
-        };
-        showTagsCheckbox.addEventListener('change', () => { syncAttendanceToggle(); setView(currentView); });
-        if (showAttendanceCheckbox) showAttendanceCheckbox.addEventListener('change', () => setView(currentView));
-        syncAttendanceToggle();
+        showTagsCheckbox.addEventListener('change', () => setView(currentView));
+        separateVideoEtc.addEventListener('change', () => {
+           [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
+           setView(currentView);
+        });
         if (zoomSelect) {
             zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
         }
@@ -927,9 +858,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             applyHighlight();
         });
-    // Keep popover in view on scroll/resize
-    window.addEventListener('scroll', positionClearPopover, { passive: true });
-    window.addEventListener('resize', positionClearPopover);
         if (window.innerWidth < 768) {
             setView('card');
         } else {
