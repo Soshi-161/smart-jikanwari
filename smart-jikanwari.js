@@ -148,7 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentName = parts[1];
             const subject1 = parts[2] || '';
             const subject2 = parts[3] || '';
-            const subject = (subject1 + ' ' + subject2).trim();
+            // Display order swapped: subject2 first, then subject1
+            const subject = (subject2 + ' ' + subject1).trim();
             // Split remaining tokens: leading ICON_TYPES are tags, the rest join as memo
             const rest = parts.slice(4);
             const tagTokens = [];
@@ -217,9 +218,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         const tagsFromLine2 = line2Parts.slice(1);
                         let instructor = '';
                         let memo = '';
-                        // New rule: line3 is [タグ...?][講師名]
-                        instructor = line3Parts[line3Parts.length - 1] || '';
-                        const tagsFromLine3 = line3Parts.slice(0, -1);
+                        // New rule: line3 is [タグ...?][講師名][メモ...?]
+                        let splitIdx = 0;
+                        while (splitIdx < line3Parts.length && KNOWN_TAG_OR_FLAGS.has(line3Parts[splitIdx])) {
+                            splitIdx++;
+                        }
+                        const tagsFromLine3 = line3Parts.slice(0, splitIdx);
+                        instructor = line3Parts[splitIdx] || '';
+                        memo = line3Parts.slice(splitIdx + 1).join(' ');
                         const allTags = [...tagsFromLine2, ...tagsFromLine3];
                         const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
                         schedule.push({
