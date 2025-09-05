@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (rowAttr === '講師' && colAttr === '時限（時間）') {
             tableHtml += '</tbody><tfoot>';
-            tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">学トレ担当講師</th>`;
+            tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
                 tableHtml += `<td class=\"py-2 px-2 text-sm text-gray-700\">${escapeHTML(name)}</td>`;
