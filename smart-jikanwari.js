@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
     const ICON_TYPES = new Set(['出席','欠席','追加受講','振替','SNET振替','講習会','マンツーマン','有効時限']);
     const showAttendanceCheckbox = document.getElementById('showAttendanceCheckbox');
+    const DEFAULT_ATTRIBUTES = ['生徒情報','時限（時間）','教科','講師','タグ','メモ'];
 
     // Known one-letter flags that may appear alongside tags
     const KNOWN_TAG_OR_FLAGS = new Set([...ICON_TYPES, '個', '映', '学', '閃']);
@@ -390,8 +391,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!rowAttr || !colAttr || rowAttr === colAttr) {
             tableContainer.innerHTML = `<div class="p-8 text-center text-gray-500">行と列に異なる属性を選択してください。</div>`; return;
         }
-        let rowHeaders = getHeaders(scheduleData, rowAttr);
-        const colHeaders = getHeaders(scheduleData, colAttr);
+        let rowHeaders = scheduleData.length ? getHeaders(scheduleData, rowAttr) : [];
+        const colHeaders = scheduleData.length ? getHeaders(scheduleData, colAttr) : [];
+        if (rowHeaders.length === 0 || colHeaders.length === 0) {
+            tableContainer.innerHTML = `<div class="p-8 text-center text-gray-400">データがありません。元データを入力してください。</div>`;
+            return;
+        }
         const dataMap = new Map();
         scheduleData.forEach(item => {
             const rowKey = item[rowAttr], colKey = item[colAttr];
@@ -766,21 +771,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadFromQuery();
         scheduleData = parseRawData(rawDataEl.value);
-        if (scheduleData.length === 0) {
-            tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
-            return;
-        }
-    // Initial unknown-tag notice
-    updateNotice();
-        const attributes = scheduleData.length > 0 ? Object.keys(scheduleData[0]).filter(key => key !== '学年') : [];
+        // Initial unknown-tag notice (works even if empty)
+        updateNotice();
+        // Determine attributes for selectors; fallback to defaults when no data
+        let attributes = scheduleData.length > 0 ? Object.keys(scheduleData[0]).filter(key => key !== '学年') : DEFAULT_ATTRIBUTES.slice();
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
             rowSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
             colSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
         });
+        // Set sensible defaults
         if (attributes.includes('講師') && attributes.includes('時限（時間）')) {
             rowSelector.value = '講師';
             colSelector.value = '時限（時間）';
+        } else if (attributes.length >= 2) {
+            rowSelector.value = attributes[0];
+            colSelector.value = attributes[1];
         }
           rawDataEl.addEventListener('input', () => {
               scheduleData = parseRawData(rawDataEl.value);
