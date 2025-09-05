@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     
     let scheduleData = [];
-    let additionalSchedule = [];
+    let additionalScheduleData = [];
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const parseRawData = (text) => {
         const lines = text.trim().split('\n'); // 受け取った文字列を行で分割した配列 cf. String.prototype.trim(), String.prototype.split()
         const schedule = [];
+        const additionalSchedule = [];
         let currentTimeslot = '不明'; // 時限
         let currentTime = '不明'; // 時限の時刻範囲
         let mode = 'unknown'; // video: 映像・学トレなど, individual: 個別授業, additional: 追記
@@ -68,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHeader = (s) => s.startsWith('時限'); // 時限    学年    生徒氏名    教科名    ｱｲｺﾝ …… cf. String.prototype.startsWith()
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
-        const isAdditional = (s) => (s == '追記'};
+        const isAdditional = (s) => (s == '追記');
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
         
         const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効期限', '重要'];
@@ -100,13 +101,14 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 lessonType = '映像・学トレなど';
             }
-            subject = parts[2];
-            if ( ['力シリーズ', 'その他', '映像・学トレなど'].indexOf(lessonType) >=0) {
-               const subject2 = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力'}[parts[3]] || parts[3];
+            subject = parts[2] || '';
+            if ( ['力シリーズ', 'その他', '映像・学トレなど'].indexOf(lessonType) >= 0) {
+                const subject2 = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力'}[parts[3]] || parts[3];
                 if (subject == '指定なし') {
                     subject = subject2;
                 } else {
                     subject = subject + ' ' + subject2;
+                }
             }
             
             let j = 4;
@@ -187,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const key = `${currentTimeslot}（${currentTime}）`;
                     if (!videoInstructorByTimeslot.has(key)) videoInstructorByTimeslot.set(key, trimmedLine);
                 }
-            } else if (mode = 'individual') { // 個別授業
+            } else if (mode == 'individual') { // 個別授業
                 if (!isStudentLine(trimmedLine)) { // 学年から始まる必要がある
                     continue; // ToDo: 想定外の入力でも何か返す
                 }
@@ -218,35 +220,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     i += 1;
                 }
             } else if (mode == 'additional') { // 追記
-                const timeslotMap {};
+                const timeslotMap = {A: 'A（13:30 〜 14:30）', B: 'B（14:40 〜 15:40）', C: 'C（15:50 〜 16:50）', D: 'D（17:00 〜 18:00）', E: 'E（18:10 〜 19:10）', F: 'F（19:20 〜 20:20）', G: 'G（20:30 〜 21:30）'};
                 const parts = trimmedLine.trim().split(/\s+/).filter(Boolean);
-                let isTimeslotLetter = '', instructor = '', content = '';
-                if (isTimeslotLetter(parts[0]) {
+                let currentTimeslot = '', instructor = '', content = '';
+                if (isTimeslotLetter(parts[0])) {
                     currentTimeslot = parts[0];
                     instructor = parts[1];
-                    content = parts.slice(2);
-                } else if (isTimeslotLetter(parts[1]) {
+                    content = parts.slice(2).join(' ');;
+                } else if (isTimeslotLetter(parts[1])) {
                     currentTimeslot = parts[1];
                     instructor = parts[0];
-                    content = parts.slice(2);
+                    content = parts.slice(2).join(' ');
                 }
                 
                 if (instructor != '') {
                     additionalSchedule.push({
                         '生徒情報': content,
-                        '時限（時間）': timeslotMap.currentTimeslot,
+                        '時限（時間）': timeslotMap[currentTimeslot],
                         '教科': content,
                         '講師': instructor,
                         'タグ': '',
                         'メモ': '',
                         '学年': '',
                     });
-                    
+                }
                 
             } // if
         } // for
         
-        return schedule;
+        return [schedule, additionalSchedule];
     };
     
     /**********************************
@@ -400,23 +402,21 @@ document.addEventListener('DOMContentLoaded', () => {
             tableContainer.innerHTML = `<div class="p-8 text-center text-gray-500">行と列に異なる属性を選択してください。</div>`; return;
         }
         
-        let rowHeaders = getHeaders(scheduleData, rowAttr);
-        const colHeaders = getHeaders(scheduleData, colAttr);
+        let schedule = scheduleData;
+        
+        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+            schedule = schedule.concat(additionalScheduleData);
+        }
+        
+        let rowHeaders = getHeaders(schedule, rowAttr);
+        const colHeaders = getHeaders(schedule, colAttr);
         const dataMap = new Map();
-        scheduleData.forEach(item => { // scheduleData[]からdataMap{}へ、表の形式で移す
+        schedule.forEach(item => { // schedule[]からdataMap{}へ、表の形式で移す
             const rowKey = item[rowAttr], colKey = item[colAttr];
             if (!dataMap.has(rowKey)) dataMap.set(rowKey, new Map());
             if (!dataMap.get(rowKey).has(colKey)) dataMap.get(rowKey).set(colKey, []);
             dataMap.get(rowKey).get(colKey).push(item);
         });
-        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
-            additionalSchedhule.forEach(item => {
-                    const rowKey = item[rowAttr], colKey = item[colAttr];
-                    if (!dataMap.has(rowKey)) dataMap.set(rowKey, new Map());
-                    if (!dataMap.get(rowKey).has(colKey)) dataMap.get(rowKey).set(colKey, []);
-                    dataMap.get(rowKey).get(colKey).push(item);
-                });
-        }
         
         const orderBySlots = (cellData, prevSlots) => { // 連コマの生徒を横並びにする関数
             const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
@@ -424,10 +424,10 @@ document.addEventListener('DOMContentLoaded', () => {
             let slots = new Array(prevSlots.length).fill(null);
             
             // prevSlots[]にいる生徒がbyStudent{}（cellData[]）にもいたら、おなじindexでslots[]にいれる
-            for (let i in prevSlots) {
-                const s = prevSlots[i];
+            for (let idx = 0; idx < prevSlots.length; idx++) {
+                const s = prevSlots[idx];
                 if (s && byStudent.has(s)) {
-                    slots[i] = byStudent.get(s);
+                    slots[idx] = byStudent.get(s);
                     used.add(s); // slots[]に入れたらused[]に記録する
                 }
             }
@@ -455,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         let tableHtml = '<div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-gray-500">';
-        tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} \\ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
         colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap sticky\" data-timeslot-col=\"${eh}\">${eh}</th>`;
@@ -493,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        tableHtml += '</tbody><tfoot class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} / ${escapeHTML(colAttr)}</th>';
+        tableHtml += `</tbody><tfoot class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
         colHeaders.forEach(h => { // 下の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
@@ -802,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         loadFromQuery();
-        scheduleData = parseRawData(rawDataEl.value);
+        [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
         if (scheduleData.length === 0) {
             tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
             return;
@@ -818,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
             colSelector.value = '時限（時間）';
         }
         rawDataEl.addEventListener('input', () => {
-           scheduleData = parseRawData(rawDataEl.value);
+           [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
         });
         rowSelector.addEventListener('change', () => {
@@ -835,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shareButton.addEventListener('click', handleShare);
         showTagsCheckbox.addEventListener('change', () => setView(currentView));
         separateVideoEtc.addEventListener('change', () => {
-           scheduleData = parseRawData(rawDataEl.value);
+           [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
         });
         if (zoomSelect) {
