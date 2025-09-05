@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const noticeArea = document.getElementById('notice-area');
+    const noticeText = document.getElementById('notice-text');
 
     let scheduleData = [];
     let currentView = 'table';
@@ -26,6 +28,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    const ICON_TYPES = new Set(['出席','欠席','追加受講','振替','SNET振替','講習会','マンツーマン','有効時限']);
+    const showAttendanceCheckbox = document.getElementById('showAttendanceCheckbox');
+
+    // Known one-letter flags that may appear alongside tags
+    const KNOWN_TAG_OR_FLAGS = new Set([...ICON_TYPES, '個', '映', '学', '閃']);
+
+    const collectUnknownTags = (data) => {
+        const unknown = new Set();
+        if (!Array.isArray(data)) return [];
+        data.forEach(item => {
+            const raw = (item && item['タグ']) ? String(item['タグ']) : '';
+            if (!raw) return;
+            raw.split(/\s+/).filter(Boolean).forEach(tok => {
+                if (!KNOWN_TAG_OR_FLAGS.has(tok)) unknown.add(tok);
+            });
+        });
+        return Array.from(unknown);
+    };
+
+    const updateNotice = () => {
+        if (!noticeArea || !noticeText) return;
+        const list = collectUnknownTags(scheduleData);
+        if (list.length > 0) {
+            const shown = list.slice(0, 10);
+            const more = list.length - shown.length;
+            const msg = more > 0
+                ? `未定義のタグがあります: ${shown.join('、')} …（ほか ${more} 件）`
+                : `未定義のタグがあります: ${shown.join('、')}`;
+            noticeText.textContent = msg;
+            noticeArea.classList.remove('hidden');
+        } else {
+            noticeText.textContent = '';
+            noticeArea.classList.add('hidden');
+        }
+    };
 
     const escapeHTML = (str) => {
         if (str === null || str === undefined) return '';
@@ -52,16 +89,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const isSectionIndividual = (s) => s.startsWith('個別授業');
         const isGradeLine = (s) => /^(小|中|高)/.test(s);
         const parseVideoStudent = (line) => {
-            // New rule: Always interpret as [学年][生徒氏名][科目名1][科目名2][タグ...]
-            // Accept any subject tokens, including "指定なし" or other exceptional values.
+            // New rule: [学年][生徒氏名][科目名1][科目名2][タグ?][メモ...]
             const parts = line.trim().split(/\s+/).filter(Boolean);
             if (parts.length < 2) return null; // Need at least grade and student name
             const grade = parts[0];
             const studentName = parts[1];
-            const subject1 = parts[2] || 'その他';
+            const subject1 = parts[2] || '';
             const subject2 = parts[3] || '';
             const subject = (subject1 + ' ' + subject2).trim();
-            const tags = parts.slice(4).filter(Boolean);
+            // Split remaining tokens: leading ICON_TYPES are tags, the rest join as memo
+            const rest = parts.slice(4);
+            const tagTokens = [];
+            let memoTokens = [];
+            for (let i = 0; i < rest.length; i++) {
+                const tk = rest[i];
+                if (ICON_TYPES.has(tk) && memoTokens.length === 0) {
+                    tagTokens.push(tk);
+                } else {
+                    memoTokens = rest.slice(i);
+                    break;
+                }
+            }
+            const tags = tagTokens;
+            const memo = memoTokens.join(' ');
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
             return {
                 '生徒情報': `${studentName} (${grade})`,
@@ -69,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 '教科': subject,
                 '講師': '映像・学トレなど',
                 'タグ': tags.join(' '),
-                'メモ': '',
+                'メモ': memo,
                 '学年': grade,
             };
         };
@@ -115,18 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const tagsFromLine2 = line2Parts.slice(1);
                         let instructor = '';
                         let memo = '';
-                        let tagsFromLine3 = [];
-                        const attendanceIndex = line3Parts.indexOf('出席');
-                        if (attendanceIndex !== -1 && attendanceIndex + 1 < line3Parts.length) {
-                            instructor = line3Parts[attendanceIndex + 1];
-                            tagsFromLine3 = line3Parts.slice(0, attendanceIndex);
-                            if (attendanceIndex + 2 < line3Parts.length) {
-                                memo = line3Parts.slice(attendanceIndex + 2).join(' ');
-                            }
-                        } else {
-                            instructor = line3Parts[line3Parts.length - 1];
-                            tagsFromLine3 = line3Parts.slice(0, -1).filter(tag => tag !== '出席');
-                        }
+                        // New rule: line3 is [タグ...?][講師名]
+                        instructor = line3Parts[line3Parts.length - 1] || '';
+                        const tagsFromLine3 = line3Parts.slice(0, -1);
                         const allTags = [...tagsFromLine2, ...tagsFromLine3];
                         const timeslotInfo = `${currentTimeslot}（${currentTime}）`;
                         schedule.push({
@@ -196,12 +237,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const color = stringToColor(item['教科']);
+            const rawTags = (item['タグ'] || '');
+            const tagList = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
+            const filteredTagList = tagList.filter(t => {
+                if (!showTagsCheckbox.checked) return false;
+                if (showAttendanceCheckbox && !showAttendanceCheckbox.checked && (t === '出席' || t === '欠席')) return false;
+                return true;
+            });
+            const visibleTagValue = escapeHTML(filteredTagList.join(' '));
             const parts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), className: '' },
                 { key: '教科', value: escapeHTML(item['教科']), className: 'text-gray-600' },
                 { key: '講師', value: `講師: ${escapeHTML(item['講師'])}`, className: 'text-gray-600' },
                 { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), className: 'text-sm text-gray-500' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), className: 'text-xs text-gray-400' },
+                { key: 'タグ', value: visibleTagValue, className: 'text-xs text-gray-400' },
             ];
             const memoText = (item['メモ'] || '').trim();
             const renderMemo = (show) => {
@@ -232,12 +281,20 @@ document.addEventListener('DOMContentLoaded', () => {
         let contentHtml = '';
         items.forEach(item => {
             const color = stringToColor(item['教科']);
+            const rawTags2 = (item['タグ'] || '');
+            const tagList2 = rawTags2 ? rawTags2.split(/\s+/).filter(Boolean) : [];
+            const filteredTagList2 = tagList2.filter(t => {
+                if (!showTagsCheckbox.checked) return false;
+                if (showAttendanceCheckbox && !showAttendanceCheckbox.checked && (t === '出席' || t === '欠席')) return false;
+                return true;
+            });
+            const visibleTagValue2 = escapeHTML(filteredTagList2.join(' '));
             const potentialParts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
                 { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-gray-600' },
                 { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-gray-600' },
                 { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-sm text-gray-500' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-xs text-gray-400' },
+                { key: 'タグ', value: visibleTagValue2, defaultClass: 'text-xs text-gray-400' },
                 { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-xs text-red-500 font-semibold' }
             ];
             let visibleParts = potentialParts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
@@ -651,6 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
             return;
         }
+    // Initial unknown-tag notice
+    updateNotice();
         const attributes = scheduleData.length > 0 ? Object.keys(scheduleData[0]).filter(key => key !== '学年') : [];
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
@@ -661,10 +720,11 @@ document.addEventListener('DOMContentLoaded', () => {
             rowSelector.value = '講師';
             colSelector.value = '時限（時間）';
         }
-        rawDataEl.addEventListener('input', () => {
-           scheduleData = parseRawData(rawDataEl.value);
-           setView(currentView);
-        });
+          rawDataEl.addEventListener('input', () => {
+              scheduleData = parseRawData(rawDataEl.value);
+              updateNotice();
+              setView(currentView);
+          });
         rowSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
@@ -677,7 +737,16 @@ document.addEventListener('DOMContentLoaded', () => {
         cardViewBtn.addEventListener('click', () => setView('card'));
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
-        showTagsCheckbox.addEventListener('change', () => setView(currentView));
+        const syncAttendanceToggle = () => {
+            if (showAttendanceCheckbox) {
+                const enabled = showTagsCheckbox.checked;
+                showAttendanceCheckbox.disabled = !enabled;
+                // If disabled, leave its checked state as-is; filtering will ignore it when disabled because showTags is false
+            }
+        };
+        showTagsCheckbox.addEventListener('change', () => { syncAttendanceToggle(); setView(currentView); });
+        if (showAttendanceCheckbox) showAttendanceCheckbox.addEventListener('change', () => setView(currentView));
+        syncAttendanceToggle();
         if (zoomSelect) {
             zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
         }
