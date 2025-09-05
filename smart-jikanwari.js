@@ -21,13 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     
     let scheduleData = [];
+    let additionalSchedule = [];
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    const lessonTypeMap = {'学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力', '自': '自習', '_': 'その他', '__': '映像・学トレなど'};
     
     /**********************************
      文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
@@ -58,9 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const parseRawData = (text) => {
         const lines = text.trim().split('\n'); // 受け取った文字列を行で分割した配列 cf. String.prototype.trim(), String.prototype.split()
         const schedule = [];
-        let isVideo = false; // true: 映像・学トレなど false: 個別授業
         let currentTimeslot = '不明'; // 時限
         let currentTime = '不明'; // 時限の時刻範囲
+        let mode = 'unknown'; // video: 映像・学トレなど, individual: 個別授業, additional: 追記
         videoInstructorByTimeslot = new Map(); // 初期化
         
         const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHeader = (s) => s.startsWith('時限'); // 時限    学年    生徒氏名    教科名    ｱｲｺﾝ …… cf. String.prototype.startsWith()
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
+        const isAdditional = (s) => (s == '追記'};
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
         
         const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効期限', '重要'];
@@ -95,15 +96,17 @@ document.addEventListener('DOMContentLoaded', () => {
             let subject = '';
             let lessonType = '';
             if (separateVideoEtc.checked) {
-                subject = parts[2];
-                lessonType = lessonTypeMap[parts[3]];
-                if (!lessonType) {
-                    subject = subject + ' ' + parts[3];
-                    lessonType = 'その他';
-                }
+                lessonType = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '力シリーズ', '読': '力シリーズ', '閃': '力シリーズ', R: '力シリーズ'}[parts[3]] || 'その他';
             } else {
-                subject = parts[2] + ' ' + parts[3];
                 lessonType = '映像・学トレなど';
+            }
+            subject = parts[2];
+            if ( ['力シリーズ', 'その他', '映像・学トレなど'].indexOf(lessonType) >=0) {
+               const subject2 = {'自': '自習', '学': '学トレ', '映': '映像授業', '英': '英語の力', '読': '読書の力', '閃': '閃きの力', R: 'Readingの力'}[parts[3]] || parts[3];
+                if (subject == '指定なし') {
+                    subject = subject2;
+                } else {
+                    subject = subject + ' ' + subject2;
             }
             
             let j = 4;
@@ -168,22 +171,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const trimmedLine= lines[i].trim();
             if (!trimmedLine) continue;
             
-            if (isSectionVideo(trimmedLine)) { isVideo = true; currentTimeslot=''; currentTime=''; continue; }
-            if (isSectionIndividual(trimmedLine)) { isVideo = false; currentTimeslot=''; currentTime=''; continue; }
+            if (isSectionVideo(trimmedLine)) { mode = 'video'; currentTimeslot=''; currentTime=''; continue; }
+            if (isSectionIndividual(trimmedLine)) { mode = 'individual'; currentTimeslot=''; currentTime=''; continue; }
+            if (isAdditional(trimmedLine)) { mode = 'additional'; currentTimeslot=''; currentTime=''; continue; }
             if (isHeader(trimmedLine)) continue;
             
             if (isTimeslotLetter(trimmedLine)) { currentTimeslot = trimmedLine; continue; }
             if (isTimeRange(trimmedLine)) { currentTime = trimmedLine; continue; }
             
-            if (isVideo) { // 映像・学トレなど
+            if (mode == 'video') { // 映像・学トレなど
                 if (isStudentLine(trimmedLine)) { // 生徒: parseVideoStudent()でオブジェクトに整形し、schedule[]にいれる
                     const rec = parseVideoStudent(trimmedLine);
                     if (rec) schedule.push(rec);
-                } else if ( !(trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) ) { // 担当講師
+                } else if ( !(trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) ) { // 力シリーズ担当講師
                     const key = `${currentTimeslot}（${currentTime}）`;
                     if (!videoInstructorByTimeslot.has(key)) videoInstructorByTimeslot.set(key, trimmedLine);
                 }
-            } else { // 個別授業
+            } else if (mode = 'individual') { // 個別授業
                 if (!isStudentLine(trimmedLine)) { // 学年から始まる必要がある
                     continue; // ToDo: 想定外の入力でも何か返す
                 }
@@ -213,6 +217,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (line2 != '') {
                     i += 1;
                 }
+            } else if (mode == 'additional') { // 追記
+                const timeslotMap {};
+                const parts = trimmedLine.trim().split(/\s+/).filter(Boolean);
+                let isTimeslotLetter = '', instructor = '', content = '';
+                if (isTimeslotLetter(parts[0]) {
+                    currentTimeslot = parts[0];
+                    instructor = parts[1];
+                    content = parts.slice(2);
+                } else if (isTimeslotLetter(parts[1]) {
+                    currentTimeslot = parts[1];
+                    instructor = parts[0];
+                    content = parts.slice(2);
+                }
+                
+                if (instructor != '') {
+                    additionalSchedule.push({
+                        '生徒情報': content,
+                        '時限（時間）': timeslotMap.currentTimeslot,
+                        '教科': content,
+                        '講師': instructor,
+                        'タグ': '',
+                        'メモ': '',
+                        '学年': '',
+                    });
+                    
+                
             } // if
         } // for
         
@@ -348,12 +378,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return uniqueStudents.map(item => item['生徒情報']);
         } else if (attr === '講師') {
-            const lessonTypes = Object.values(lessonTypeMap);
+            const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
             return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
-                if ( lessonTypes.indexOf(a) < 0 && lessonTypes.indexOf(b) < 0 ) {
+                if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
                     return a.localeCompare(b, 'ja');
                 } else {
-                    return lessonTypes.indexOf(a) - lessonTypes.indexOf(b);
+                    return videoEtcLessonTypes.indexOf(a) - videoEtcLessonTypes.indexOf(b);
                 }
                 
             });
@@ -379,6 +409,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!dataMap.get(rowKey).has(colKey)) dataMap.get(rowKey).set(colKey, []);
             dataMap.get(rowKey).get(colKey).push(item);
         });
+        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+            additionalSchedhule.forEach(item => {
+                    const rowKey = item[rowAttr], colKey = item[colAttr];
+                    if (!dataMap.has(rowKey)) dataMap.set(rowKey, new Map());
+                    if (!dataMap.get(rowKey).has(colKey)) dataMap.get(rowKey).set(colKey, []);
+                    dataMap.get(rowKey).get(colKey).push(item);
+                });
+        }
         
         const orderBySlots = (cellData, prevSlots) => { // 連コマの生徒を横並びにする関数
             const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
@@ -420,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} \\ ${escapeHTML(colAttr)}</th>`;
         colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
-            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap sticky\" data-timeslot-col=\"${eh}\">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
         
@@ -455,7 +493,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        tableHtml += '</tbody></table></div>';
+        tableHtml += '</tbody><tfoot class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} / ${escapeHTML(colAttr)}</th>';
+        colHeaders.forEach(h => { // 下の見出し
+            const eh = escapeHTML(h);
+            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+        });
+        tableHtml += `</tr></tfoot></table></div>`;
+        
         tableContainer.innerHTML = tableHtml;
         applyHighlight();
         // Re-apply zoom after rerender
