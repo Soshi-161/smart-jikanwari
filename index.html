@@ -92,6 +92,12 @@ C
   蓮見悠生
 </textarea>
         </div>
+        <div id="notice-area" class="mb-6 hidden">
+            <div class="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-sm">
+                <span class="font-semibold">注意:</span>
+                <span id="notice-text"></span>
+            </div>
+        </div>
 
         <!-- コントロールパネル -->
         <div id="control-panel" class="bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col gap-6">
@@ -120,6 +126,10 @@ C
                          <div class="flex items-center gap-2">
                             <input id="showTagsCheckbox" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
                             <label for="showTagsCheckbox" class="text-sm font-medium text-gray-700">タグを表示</label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input id="showAttendanceCheckbox" type="checkbox" class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
+                            <label for="showAttendanceCheckbox" class="text-sm font-medium text-gray-700">出欠状況を表示</label>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-medium text-gray-600">ズーム:</span>
