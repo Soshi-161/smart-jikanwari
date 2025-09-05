@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAdditional = (s) => (s == '追記');
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
         
-        const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効期限', '重要'];
+        const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効時限', '重要'];
         
         const parseVideoStudent = (line) => {
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`; // 時限
