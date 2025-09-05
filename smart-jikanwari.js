@@ -128,7 +128,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const parseRawData = (text) => {
-        const lines = text.trim().split('\n');
+        // Remove blank/whitespace-only lines before interpretation (handles CRLF too)
+        const lines = text
+            .split('\n')
+            .map(l => l.replace(/\r/g, ''))
+            .filter(l => l.trim().length > 0);
         const schedule = [];
         let currentTimeslot = '', currentTime = '';
         let mode = 'unknown';
