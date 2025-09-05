@@ -20,6 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     const noticeArea = document.getElementById('notice-area');
     const noticeText = document.getElementById('notice-text');
+    const panelToggleBtn = document.getElementById('panelToggleBtn');
+    const panelBody = document.getElementById('panel-body');
+    const clearDataButton = document.getElementById('clearDataButton');
+    const clearPopover = document.getElementById('clearPopover');
+    const clearCancelBtn = document.getElementById('clearCancelBtn');
+    const clearConfirmBtn = document.getElementById('clearConfirmBtn');
 
     let scheduleData = [];
     let currentView = 'table';
@@ -62,6 +68,52 @@ document.addEventListener('DOMContentLoaded', () => {
             noticeText.textContent = '';
             noticeArea.classList.add('hidden');
         }
+    };
+
+    const positionClearPopover = () => {
+        if (!clearPopover || !clearDataButton || clearPopover.classList.contains('hidden')) return;
+        const rect = clearDataButton.getBoundingClientRect();
+        // Make visible but hidden to measure
+        const prevVis = clearPopover.style.visibility;
+        clearPopover.style.visibility = 'hidden';
+        // Ensure it's rendered for measurement
+        const prevHidden = clearPopover.classList.contains('hidden');
+        if (prevHidden) clearPopover.classList.remove('hidden');
+        const vpW = window.innerWidth;
+        const vpH = window.innerHeight;
+        const margin = 8;
+        // Constrain max width to viewport width minus margins
+        const maxW = Math.max(160, vpW - margin * 2);
+        clearPopover.style.maxWidth = `${maxW}px`;
+        // Measure after applying max-width
+        const popW = clearPopover.offsetWidth;
+        const popH = clearPopover.offsetHeight;
+        let left = rect.left; // fixed position uses viewport coords
+        let top = rect.bottom + margin;
+        // Horizontal clamp with margin
+        if (left + popW > vpW - margin) {
+            // Try aligning right edge of popover to right edge of button first
+            left = Math.max(margin, Math.min(vpW - popW - margin, rect.right - popW));
+        }
+        left = Math.max(margin, left);
+        // Prefer below; if overflow bottom, try above, else clamp
+        if (top + popH > vpH - margin) {
+            const above = rect.top - popH - margin;
+            top = above >= margin ? above : Math.max(margin, vpH - popH - margin);
+        }
+        clearPopover.style.left = `${left}px`;
+        clearPopover.style.top = `${top}px`;
+        // Restore visibility
+        clearPopover.style.visibility = prevVis || '';
+    };
+    const showClearPopover = () => {
+        if (!clearPopover || !clearDataButton) return;
+        clearPopover.classList.remove('hidden');
+        positionClearPopover();
+    };
+    const hideClearPopover = () => {
+        if (!clearPopover) return;
+        clearPopover.classList.add('hidden');
     };
 
     const escapeHTML = (str) => {
@@ -737,6 +789,104 @@ document.addEventListener('DOMContentLoaded', () => {
         cardViewBtn.addEventListener('click', () => setView('card'));
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
+        if (panelToggleBtn && panelBody) {
+            const collapse = (el) => {
+                const cs = getComputedStyle(el);
+                const pt = cs.paddingTop;
+                const pb = cs.paddingBottom;
+                el.dataset.pt = pt;
+                el.dataset.pb = pb;
+                el.style.boxSizing = 'border-box';
+                el.style.height = el.scrollHeight + 'px';
+                el.style.opacity = '1';
+                // Force reflow
+                void el.offsetHeight;
+                el.style.transition = 'height 250ms ease, opacity 200ms ease, padding 250ms ease';
+                el.style.paddingTop = '0px';
+                el.style.paddingBottom = '0px';
+                el.style.height = '0px';
+                el.style.opacity = '0';
+                const onEnd = (ev) => {
+                    if (ev.target !== el) return;
+                    el.removeEventListener('transitionend', onEnd);
+                    el.classList.add('hidden');
+                    el.style.transition = '';
+                    el.style.height = '';
+                    el.style.opacity = '';
+                    el.style.paddingTop = '';
+                    el.style.paddingBottom = '';
+                    el.style.boxSizing = '';
+                };
+                el.addEventListener('transitionend', onEnd);
+            };
+            const expand = (el) => {
+                const pt = el.dataset.pt || getComputedStyle(el).paddingTop;
+                const pb = el.dataset.pb || getComputedStyle(el).paddingBottom;
+                el.classList.remove('hidden');
+                el.style.boxSizing = 'border-box';
+                el.style.height = '0px';
+                el.style.opacity = '0';
+                el.style.paddingTop = '0px';
+                el.style.paddingBottom = '0px';
+                // Force reflow
+                void el.offsetHeight;
+                el.style.transition = 'height 250ms ease, opacity 200ms ease, padding 250ms ease';
+                el.style.height = el.scrollHeight + 'px';
+                el.style.paddingTop = pt;
+                el.style.paddingBottom = pb;
+                el.style.opacity = '1';
+                const onEnd = (ev) => {
+                    if (ev.target !== el) return;
+                    el.removeEventListener('transitionend', onEnd);
+                    el.style.transition = '';
+                    el.style.height = '';
+                    el.style.opacity = '';
+                    el.style.paddingTop = '';
+                    el.style.paddingBottom = '';
+                    el.style.boxSizing = '';
+                    delete el.dataset.pt;
+                    delete el.dataset.pb;
+                };
+                el.addEventListener('transitionend', onEnd);
+            };
+            panelToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const expanded = panelToggleBtn.getAttribute('aria-expanded') === 'true';
+                panelToggleBtn.setAttribute('aria-expanded', String(!expanded));
+                if (expanded) {
+                    collapse(panelBody);
+                    panelToggleBtn.textContent = '展開する';
+                } else {
+                    expand(panelBody);
+                    panelToggleBtn.textContent = '折りたたむ';
+                }
+            });
+        }
+        if (clearDataButton) {
+            clearDataButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                showClearPopover();
+            });
+        }
+        if (clearCancelBtn) {
+            clearCancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                hideClearPopover();
+            });
+        }
+        if (clearConfirmBtn) {
+            clearConfirmBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                hideClearPopover();
+                // Clear the data and update everything
+                rawDataEl.value = '';
+                scheduleData = parseRawData('');
+                updateNotice();
+                // Re-render views with empty state
+                tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
+                cardContainer.innerHTML = '';
+            });
+        }
         const syncAttendanceToggle = () => {
             if (showAttendanceCheckbox) {
                 const enabled = showTagsCheckbox.checked;
@@ -767,6 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             applyHighlight();
         });
+    // Keep popover in view on scroll/resize
+    window.addEventListener('scroll', positionClearPopover, { passive: true });
+    window.addEventListener('resize', positionClearPopover);
         if (window.innerWidth < 768) {
             setView('card');
         } else {
