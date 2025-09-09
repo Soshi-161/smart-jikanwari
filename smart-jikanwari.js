@@ -16,6 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const shareButton = document.getElementById('shareButton');
     const showTagsCheckbox = document.getElementById('showTagsCheckbox');
     const separateVideoEtc = document.getElementById('separateVideoEtc');
+    // Added UI elements
+    const panelToggleBtn = document.getElementById('panelToggleBtn');
+    const panelBody = document.getElementById('panel-body');
+    const clearDataButton = document.getElementById('clearDataButton');
+    const clearPopover = document.getElementById('clearPopover');
+    const clearCancelBtn = document.getElementById('clearCancelBtn');
+    const clearConfirmBtn = document.getElementById('clearConfirmBtn');
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
@@ -28,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
     const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    // Built-in default attribute choices when no data is present
+    const DEFAULT_ATTRIBUTES = ['生徒情報','時限（時間）','教科','講師','タグ','メモ'];
     
     /**********************************
      文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
@@ -408,8 +417,12 @@ document.addEventListener('DOMContentLoaded', () => {
             schedule = schedule.concat(additionalScheduleData);
         }
         
-        let rowHeaders = getHeaders(schedule, rowAttr);
-        const colHeaders = getHeaders(schedule, colAttr);
+        let rowHeaders = schedule.length ? getHeaders(schedule, rowAttr) : [];
+        const colHeaders = schedule.length ? getHeaders(schedule, colAttr) : [];
+        if (rowHeaders.length === 0 || colHeaders.length === 0) {
+            tableContainer.innerHTML = `<div class="p-8 text-center text-gray-400">データがありません。元データを入力してください。</div>`;
+            return;
+        }
         const dataMap = new Map();
         schedule.forEach(item => { // schedule[]からdataMap{}へ、表の形式で移す
             const rowKey = item[rowAttr], colKey = item[colAttr];
@@ -803,19 +816,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadFromQuery();
         [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
-        if (scheduleData.length === 0) {
-            tableContainer.innerHTML = `<div class=\"p-8 text-center text-red-500\">データがありません。</div>`;
-            return;
-        }
-        const attributes = scheduleData.length > 0 ? Object.keys(scheduleData[0]).filter(key => key !== '学年') : [];
+        // Build selector options from data or defaults
+        const attributes = scheduleData.length > 0
+            ? Object.keys(scheduleData[0]).filter(key => key !== '学年')
+            : DEFAULT_ATTRIBUTES.slice();
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
             rowSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
             colSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
         });
+        // Set sensible defaults
         if (attributes.includes('講師') && attributes.includes('時限（時間）')) {
             rowSelector.value = '講師';
             colSelector.value = '時限（時間）';
+        } else if (attributes.length >= 2) {
+            rowSelector.value = attributes[0];
+            colSelector.value = attributes[1];
         }
         rawDataEl.addEventListener('input', () => {
            [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
@@ -834,10 +850,129 @@ document.addEventListener('DOMContentLoaded', () => {
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
         showTagsCheckbox.addEventListener('change', () => setView(currentView));
-        separateVideoEtc.addEventListener('change', () => {
-           [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
-           setView(currentView);
-        });
+        if (separateVideoEtc) {
+            separateVideoEtc.addEventListener('change', () => {
+                [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
+                setView(currentView);
+                // Fire custom event for external listeners
+                try {
+                    const ev = new CustomEvent('separateVideoEtc', { detail: { checked: !!separateVideoEtc.checked } });
+                    document.dispatchEvent(ev);
+                } catch (_) { /* ignore */ }
+            });
+        }
+        // Collapsible panel toggle with simple height animation
+        if (panelToggleBtn && panelBody) {
+            const collapse = () => {
+                panelToggleBtn.setAttribute('aria-expanded', 'false');
+                panelToggleBtn.textContent = '展開する';
+                const h = panelBody.scrollHeight;
+                panelBody.style.overflow = 'hidden';
+                panelBody.style.height = h + 'px';
+                // force reflow
+                void panelBody.offsetHeight;
+                panelBody.style.transition = 'height 200ms ease';
+                panelBody.style.height = '0px';
+                const onEnd = () => {
+                    panelBody.removeEventListener('transitionend', onEnd);
+                    panelBody.style.display = 'none';
+                    panelBody.style.transition = '';
+                    panelBody.style.height = '';
+                    panelBody.style.overflow = '';
+                };
+                panelBody.addEventListener('transitionend', onEnd);
+            };
+            const expand = () => {
+                panelToggleBtn.setAttribute('aria-expanded', 'true');
+                panelToggleBtn.textContent = '折りたたむ';
+                panelBody.style.display = 'block';
+                panelBody.style.overflow = 'hidden';
+                panelBody.style.height = '0px';
+                // force reflow
+                void panelBody.offsetHeight;
+                const target = panelBody.scrollHeight;
+                panelBody.style.transition = 'height 220ms ease';
+                panelBody.style.height = target + 'px';
+                const onEnd = () => {
+                    panelBody.removeEventListener('transitionend', onEnd);
+                    panelBody.style.transition = '';
+                    panelBody.style.height = '';
+                    panelBody.style.overflow = '';
+                };
+                panelBody.addEventListener('transitionend', onEnd);
+            };
+            panelToggleBtn.addEventListener('click', () => {
+                const expanded = panelToggleBtn.getAttribute('aria-expanded') === 'true';
+                if (expanded) collapse(); else expand();
+            });
+        }
+        // Clear data popover positioning and actions
+        const isPopoverVisible = () => clearPopover && !clearPopover.classList.contains('hidden');
+        const positionPopover = () => {
+            if (!isPopoverVisible() || !clearDataButton || !clearPopover) return;
+            const btnRect = clearDataButton.getBoundingClientRect();
+            const popInner = clearPopover.firstElementChild;
+            if (!popInner) return;
+            const viewportPadding = 8;
+            // Default position: below and left-aligned to the button
+            let left = window.scrollX + btnRect.left;
+            let top = window.scrollY + btnRect.bottom + 8;
+            const popWidth = popInner.offsetWidth || 288; // fallback to w-72
+            const popHeight = popInner.offsetHeight || 160;
+            // Clamp horizontally within the UI container (fallback to viewport)
+            const container = document.querySelector('.container');
+            if (container) {
+                const crect = container.getBoundingClientRect();
+                const containerLeft = window.scrollX + crect.left;
+                const containerRight = window.scrollX + crect.right;
+                const maxLeft = containerRight - popWidth - viewportPadding;
+                const minLeft = containerLeft + viewportPadding;
+                left = Math.max(minLeft, Math.min(left, maxLeft));
+            } else {
+                const maxLeft = window.scrollX + window.innerWidth - popWidth - viewportPadding;
+                const minLeft = window.scrollX + viewportPadding;
+                left = Math.max(minLeft, Math.min(left, maxLeft));
+            }
+            const maxTop = window.scrollY + window.innerHeight - popHeight - viewportPadding;
+            const minTop = window.scrollY + viewportPadding;
+            top = Math.max(minTop, Math.min(top, maxTop));
+            clearPopover.style.left = left + 'px';
+            clearPopover.style.top = top + 'px';
+        };
+        const showClearPopover = () => {
+            if (!clearPopover) return;
+            clearPopover.classList.remove('hidden');
+            positionPopover();
+        };
+        const hideClearPopover = () => {
+            if (!clearPopover) return;
+            clearPopover.classList.add('hidden');
+        };
+        if (clearDataButton && clearPopover) {
+            clearDataButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                showClearPopover();
+            });
+            if (clearCancelBtn) clearCancelBtn.addEventListener('click', hideClearPopover);
+            if (clearConfirmBtn) clearConfirmBtn.addEventListener('click', () => {
+                rawDataEl.value = '';
+                [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
+                selectedStudent = null; selectedTimeslot = null;
+                setView(currentView);
+                hideClearPopover();
+                rawDataEl.focus();
+            });
+            // Dismiss on outside click
+            document.addEventListener('mousedown', (ev) => {
+                if (!isPopoverVisible()) return;
+                if (clearPopover.contains(ev.target)) return;
+                if (ev.target === clearDataButton || clearDataButton.contains(ev.target)) return;
+                hideClearPopover();
+            });
+            // Reposition on scroll/resize
+            window.addEventListener('scroll', () => { if (isPopoverVisible()) positionPopover(); }, true);
+            window.addEventListener('resize', () => { if (isPopoverVisible()) positionPopover(); });
+        }
         if (zoomSelect) {
             zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
         }
@@ -864,6 +999,13 @@ document.addEventListener('DOMContentLoaded', () => {
             setView('table');
             applyZoom(1);
         }
+        // Emit initial separateVideoEtc state for listeners
+        try {
+            if (separateVideoEtc) {
+                const ev = new CustomEvent('separateVideoEtc', { detail: { checked: !!separateVideoEtc.checked } });
+                document.dispatchEvent(ev);
+            }
+        } catch (_) { /* ignore */ }
     };
 
     initialize();
