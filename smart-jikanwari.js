@@ -34,7 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedTimeslot = null;
     let videoInstructorByTimeslot = new Map();
     let currentZoom = 1;
-    const allowedZooms = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    // Zoom is now controlled as percent 30-150 via a numeric input; internal scale remains 0.3-1.5
+    const ZOOM_MIN = 0.3, ZOOM_MAX = 1.5;
     // Built-in default attribute choices when no data is present
     const DEFAULT_ATTRIBUTES = ['生徒情報','時限（時間）','教科','講師','タグ','メモ'];
     
@@ -694,26 +695,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const applyZoom = (scale) => {
         if (typeof scale !== 'number' || !isFinite(scale)) return;
-        currentZoom = Math.min(Math.max(scale, allowedZooms[0]), allowedZooms[allowedZooms.length - 1]);
-        // Use CSS zoom to scale layout without extra scroll space
+        currentZoom = Math.min(Math.max(scale, ZOOM_MIN), ZOOM_MAX);
         tableContainer.style.zoom = String(currentZoom);
         if (zoomSelect) {
-            // Snap select to closest allowed value
-            let closest = allowedZooms[0];
-            let diff = Math.abs(currentZoom - closest);
-            for (const z of allowedZooms) {
-                const d = Math.abs(currentZoom - z);
-                if (d < diff) { diff = d; closest = z; }
-            }
-            zoomSelect.value = String(closest);
+            const pct = Math.round(currentZoom * 100);
+            zoomSelect.value = String(pct);
         }
     };
 
     const zoomStep = (dir) => {
-        const idx = allowedZooms.indexOf(Number(zoomSelect?.value || currentZoom));
-        if (idx === -1) return applyZoom(currentZoom);
-        const nextIdx = dir > 0 ? Math.min(idx + 1, allowedZooms.length - 1) : Math.max(idx - 1, 0);
-        applyZoom(allowedZooms[nextIdx]);
+        // Step by 10% per click
+        const currentPct = Number(zoomSelect?.value) || Math.round(currentZoom * 100);
+        const nextPct = Math.min(150, Math.max(30, currentPct + (dir > 0 ? 10 : -10)));
+        applyZoom(nextPct / 100);
+        renderTableView();
     };
 
     const buildShareUrl = () => {
@@ -972,7 +967,13 @@ document.addEventListener('DOMContentLoaded', () => {
             window.addEventListener('resize', () => { if (isPopoverVisible()) positionPopover(); });
         }
         if (zoomSelect) {
-            zoomSelect.addEventListener('change', () => { applyZoom(Number(zoomSelect.value)); renderTableView(); });
+            zoomSelect.addEventListener('change', () => {
+                const raw = Number(zoomSelect.value);
+                if (isNaN(raw)) return;
+                const clamped = Math.min(150, Math.max(30, raw));
+                applyZoom(clamped / 100);
+                renderTableView();
+            });
         }
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });

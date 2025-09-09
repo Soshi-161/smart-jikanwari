@@ -120,14 +120,8 @@
                                 <div class="flex items-center gap-2">
                                     <span class="text-sm font-medium text-gray-600">ズーム:</span>
                                     <button id="zoomOutBtn" class="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm" title="縮小">−</button>
-                                    <select id="zoomSelect" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1">
-                                        <option value="0.5">50%</option>
-                                        <option value="0.75">75%</option>
-                                        <option value="1" selected>100%</option>
-                                        <option value="1.25">125%</option>
-                                        <option value="1.5">150%</option>
-                                        <option value="2">200%</option>
-                                    </select>
+                                    <input id="zoomSelect" type="number" inputmode="numeric" min="30" max="150" step="1" value="100" class="w-20 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 p-1 text-right" aria-label="ズーム（パーセント）">
+                                    <span class="text-sm text-gray-600"></span>
                                     <button id="zoomInBtn" class="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm" title="拡大">＋</button>
                                 </div>
                             </div>
