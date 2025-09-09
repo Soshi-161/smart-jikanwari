@@ -500,10 +500,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (colAttr === '時限（時間）') { // 力シリーズ担当講師
-            tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">力シリーズ担当講師</th>`;
+            tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" data-row-key=\"力シリーズ担当講師\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
-                tableHtml += `<td class=\"py-2 px-2 text-sm text-gray-700\">${escapeHTML(name)}</td>`;
+                tableHtml += `<td class=\"py-2 px-2 text-sm text-gray-700\" data-timeslot-col=\"${escapeHTML(colH)}\" data-row-key=\"力シリーズ担当講師\">${escapeHTML(name)}</td>`;
             });
         }
         
