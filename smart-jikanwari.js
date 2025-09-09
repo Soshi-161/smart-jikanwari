@@ -914,27 +914,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const popInner = clearPopover.firstElementChild;
             if (!popInner) return;
             const viewportPadding = 8;
-            // Default position: below and left-aligned to the button
-            let left = window.scrollX + btnRect.left;
-            let top = window.scrollY + btnRect.bottom + 8;
+            // Default position (fixed): below and left-aligned to the button
+            let left = btnRect.left;
+            let top = btnRect.bottom + 8;
             const popWidth = popInner.offsetWidth || 288; // fallback to w-72
             const popHeight = popInner.offsetHeight || 160;
             // Clamp horizontally within the UI container (fallback to viewport)
             const container = document.querySelector('.container');
             if (container) {
                 const crect = container.getBoundingClientRect();
-                const containerLeft = window.scrollX + crect.left;
-                const containerRight = window.scrollX + crect.right;
-                const maxLeft = containerRight - popWidth - viewportPadding;
-                const minLeft = containerLeft + viewportPadding;
+                const maxLeft = crect.right - popWidth - viewportPadding;
+                const minLeft = crect.left + viewportPadding;
                 left = Math.max(minLeft, Math.min(left, maxLeft));
             } else {
-                const maxLeft = window.scrollX + window.innerWidth - popWidth - viewportPadding;
-                const minLeft = window.scrollX + viewportPadding;
+                const maxLeft = window.innerWidth - popWidth - viewportPadding;
+                const minLeft = viewportPadding;
                 left = Math.max(minLeft, Math.min(left, maxLeft));
             }
-            const maxTop = window.scrollY + window.innerHeight - popHeight - viewportPadding;
-            const minTop = window.scrollY + viewportPadding;
+            const maxTop = window.innerHeight - popHeight - viewportPadding;
+            const minTop = viewportPadding;
             top = Math.max(minTop, Math.min(top, maxTop));
             clearPopover.style.left = left + 'px';
             clearPopover.style.top = top + 'px';
