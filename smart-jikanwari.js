@@ -321,22 +321,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 color = 'transparent';
                 parts = [
                     { key: '生徒情報', value: '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: '&nbsp;', defaultClass: 'text-gray-600' },
-                    { key: '講師', value: '&nbsp;', defaultClass: 'text-gray-600' },
-                    { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-sm text-gray-500' },
-                    { key: 'タグ', value: '&nbsp;', defaultClass: 'text-xs text-gray-400' },
-                    { key: 'メモ', value: '&nbsp;', defaultClass: 'text-xs text-red-500 font-semibold text-memo' },
+                    { key: '教科', value: '&nbsp;', defaultClass: 'text-subject' },
+                    { key: '講師', value: '&nbsp;', defaultClass: 'text-class' },
+                    { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'タグ', value: '&nbsp;', defaultClass: 'text-icon' },
+                    { key: 'メモ', value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             } else {
                 dataAttrs = `data-student="${escapeHTML(item['生徒情報'])}" data-timeslot="${escapeHTML(item['時限（時間）'])}"`;
                 color = stringToColor(item['教科']);
                 parts = [
                     { key: '生徒情報', value: escapeHTML(item['生徒情報']) || '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-gray-600' },
-                    { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-gray-600' },
-                    { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-sm text-gray-500' },
-                    { key: 'タグ', value: escapeHTML(item['タグ']) || '&nbsp;', defaultClass: 'text-xs text-gray-400' },
-                    { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-xs text-red-500 font-semibold text-memo' },
+                    { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-subject' },
+                    { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-class' },
+                    { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'タグ', value: escapeHTML(item['タグ']) || '&nbsp;', defaultClass: 'text-icon' },
+                    { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             }
             
@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             let infoHtml = visibleParts.map((p, i) => {
-                const cls = i === 0 ? 'font-bold text-gray-800' : p.defaultClass;
+                const cls = i === 0 ? 'text-first' : p.defaultClass;
                 return `<p class="${cls}">${p.value}</p>`;
             }).join('');
             
@@ -371,18 +371,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const color = stringToColor(item['教科']);
             const parts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
-                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-gray-600' },
-                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-gray-600' },
-                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-sm text-gray-500' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-xs text-gray-400' },
-                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-xs text-red-500 font-semibold' }
+                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-subject' },
+                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-class' },
+                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-period' },
+                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-icon' },
+                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-memo' }
             ];
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             if (!showTagsCheckbox.checked) {
                 visibleParts = visibleParts.filter(p => p.key !== 'タグ');
             }
             const infoHtml = visibleParts.map((p, i) => {
-                const cls = i === 0 ? 'font-bold text-gray-800' : p.defaultClass;
+                const cls = i === 0 ? 'text-first' : p.defaultClass;
                 return `<p class="${cls}">${p.value}</p>`;
             }).join('');
             contentHtml += `<div class="cardview-card" style="border-color: ${color};">${infoHtml}</div>`;
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHtml += `<tr class="table-row-power"><th scope="row" class="table-side-power">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
-                tableHtml += `<td class="table-cell-power">${escapeHTML(name)}</td>`;
+                tableHtml += `<td class="table-cell-power" data-timeslot-col="${escapeHTML(colH)}">${escapeHTML(name)}</td>`;
             });
         }
         
