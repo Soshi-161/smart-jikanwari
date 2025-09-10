@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スマート時間割</title>
+    <title class="no-print">スマート時間割</title>
     <meta name="application-name" content="スマート時間割">
     <!-- Security: CSP and Referrer Policy -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests">
@@ -12,19 +12,162 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style type="text/tailwindcss">
+        @layer utilities {
+            /* テーブルビュー */
+            .table-div {
+                @apply overflow-x-auto;
+            }
+            
+            .table-table {
+                @apply min-w-full text-sm text-left text-gray-500;
+            }
+            
+            /* ヘッダ（フッタ）: 左上と上の見出しが入る */
+            .table-head {
+                @apply text-xs text-gray-700 uppercase bg-gray-100;
+            }
+            
+            /* 左上（左下） */
+            .table-top-side {
+                @apply py-3 px-4 font-bold whitespace-nowrap bg-gray-100 left-0 z-20;
+                box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
+            }
+            
+            /* 上（下）の見出し */
+            .table-top {
+                @apply py-3 px-4 font-semibold whitespace-nowrap;
+            }
+            
+            /* 行 */
+            .table-row {
+                @apply bg-white border-b hover:bg-gray-50;
+            }
+            
+            /* 左の見出し */
+            .table-side {
+                @apply py-3 px-4 font-bold text-gray-900 whitespace-nowrap bg-white border-r sticky left-0 z-10;
+                box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
+            }
+            
+            /* セル */
+            .table-cell {
+                @apply py-2 px-2 align-top min-w-[200px];
+            }
+            
+            /* セル内のdiv要素 */
+            .table-cell-content {
+                @apply flex flex-col gap-2;
+            }
+            
+            /* セル内のカード */
+            .table-card {
+                @apply bg-white p-2 rounded-md border-l-4 flex flex-col justify-start;
+            }
+            
+            /* 連コマを横並びにするときのすきまを埋める空のカード */
+            .table-card.placeholder {
+                visibility: hidden;
+                pointer-events: none;
+            }
+            
+            .text-memo {
+                min-height: 2rem;
+                max-height: 2rem;
+                overflow: hidden; /* cf. line-clamp */
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+            }
+            
+            /* 力シリーズ */
+            /* 行 */
+            .table-row-power {
+                @apply bg-gray-50 border-t;
+            }
+            
+            /* 見出し */
+            .table-side-power {
+                @apply py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10;
+                box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
+            }
+            
+            /* セル */
+            .table-cell-power {
+                @apply py-2 px-2 text-sm text-gray-700;
+            }
+            
+            /* カードビュー */
+            .cardview-div {
+                @apply bg-white rounded-xl shadow-lg overflow-hidden;
+            }
+            
+            .cardview-first {
+                @apply p-4 bg-gray-100 border-b;
+            }
+            
+            .cardview-first-index {
+                @apply font-bold text-lg text-gray-800;
+            }
+            
+            .cardview-first-content {
+                @apply p-4 space-y-4;
+            }
+            
+            .cardview-second {
+                
+            }
+            
+            .cardview-second-index {
+                @apply font-semibold text-md text-gray-700 mb-2 pb-1 border-b;
+            }
+            
+            .cardview-second-content {
+                @apply space-y-2;
+            }
+            
+            .cardview-card {
+                @apply bg-gray-50 p-3 rounded-md border-l-4;
+            }
+        }
+    </style>
     <style>
         body {
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
         }
-            /* スロット用プレースホルダー（空きスロットを目視上確保） */
-            .class-card.placeholder {
-                visibility: hidden;
-                pointer-events: none;
+        
+        /* マイクリア・新中学問題集の色 */
+        :root {
+            --border-color-english: #2570e1;
+            --border-color-math: #e64b4b;
+            --border-color-japanese: #65bb4a;
+            --border-color-science: #ffa00b;
+            --border-color-social: #b464dd;
+            --border-color-other: #888888;
+        }
+        
+        @media print {
+            :root {
+                --border-color-english: #000;
+                --border-color-math: #aaa;
+                --border-color-japanese: #222;
+                --border-color-science: #888;
+                --border-color-social: #444;
+                --border-color-other: #666;
             }
+            
+            .no-print {
+                display: none;
+            }
+        }
+        @page {
+            size: B4;
+        }
+        
         .view-btn.active {
             background-color: #3b82f6;
             color: white;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px 0 rgb(0 0 0 / 0.06);
         }
         /* ハイライト用（Tailwind CDNは動的クラス未検出のため純CSSで定義） */
         .col-highlight {
@@ -59,13 +202,13 @@
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-        <header class="mb-8 text-center">
+        <header class="mb-8 text-center no-print">
             <h1 class="text-4xl font-bold text-gray-900 tracking-tight">スマート時間割</h1>
             <p class="mt-3 text-lg text-gray-600">テキストデータを貼り付けるだけで、インタラクティブな時間割を作成します。</p>
         </header>
 
         <!-- 元データ表示エリア -->
-        <div id="data-area" class="mb-8">
+        <div id="data-area" class="mb-8 no-print">
             <label for="rawData" class="text-lg font-semibold mb-2 block">1. 元データをここに貼り付け</label>
             <textarea id="rawData" class="w-full h-48 p-4 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" spellcheck="false">
 映像・学トレなど
@@ -94,7 +237,7 @@ C
         </div>
 
         <!-- コントロールパネル -->
-        <div id="control-panel" class="bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col gap-6">
+        <div id="control-panel" class="bg-white p-6 rounded-xl shadow-md mb-8 flex flex-col gap-6 no-print">
             <div>
                 <h2 class="text-lg font-semibold mb-3">2. 表示をカスタマイズ</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -110,7 +253,7 @@ C
             </div>
             <div class="border-t border-gray-200 pt-5">
                  <h2 class="text-lg font-semibold mb-3">3. 出力</h2>
-                 <div class="flex flex-col sm:flex-col items-center justify-between gap-4">
+                 <div class="flex flex-col items-center justify-between gap-4">
                     <div class="flex items-center justify-center gap-4 flex-wrap">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-medium text-gray-600">表示モード:</span>
@@ -121,7 +264,7 @@ C
                             <input id="showTagsCheckbox" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
                             <label for="showTagsCheckbox" class="text-sm font-medium text-gray-700">タグを表示</label>
                         </div>
-　　　　　　　　　　　　　<div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2">
                             <input id="separateVideoEtc" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
                             <label for="separateVideoEtc" class="text-sm font-medium text-gray-700">映像・学トレなどを分割</label>
                         </div>
