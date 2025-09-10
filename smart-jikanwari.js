@@ -321,12 +321,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let contentHtml = '<div class="table-cell-content">';
         cellData.forEach(item => {
             if (!item) return;
-            
+
+            let extraClass = '';
             let dataAttrs = '';
             let color = '';
             let parts = [];
             if (item && item.__placeholder) { //連コマを横並びにするときのすきまを埋める空のカード
-                dataAttrs = 'placeholder';
+                extraClass = 'placeholder';
                 color = 'transparent';
                 parts = [
                     { key: '生徒情報', value: '&nbsp;', defaultClass: '' },
@@ -358,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `<p class="${cls}">${p.value}</p>`;
             }).join('');
             
-            contentHtml += `<div class="table-card" ${dataAttrs} style="border-color: ${color}; cursor: pointer;">${infoHtml}</div>`;
+            contentHtml += `<div class="table-card ${extraClass}" ${dataAttrs} style="border-color: ${color}; cursor: pointer;">${infoHtml}</div>`;
         });
         return contentHtml + '</div>';
     };

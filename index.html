@@ -65,12 +65,6 @@
                 @apply bg-white p-2 rounded-md border-l-4 flex flex-col justify-start;
             }
             
-            /* 連コマを横並びにするときのすきまを埋める空のカード */
-            .table-card.placeholder {
-                visibility: hidden;
-                pointer-events: none;
-            }
-            
             /* 力シリーズ */
             /* 行 */
             .table-row-power {
@@ -163,13 +157,21 @@
         }
         
         /* マイクリア・新中学問題集の色 */
-        :root {
-            --border-color-english: #2570e1;
-            --border-color-math: #e64b4b;
-            --border-color-japanese: #65bb4a;
-            --border-color-science: #ffa00b;
-            --border-color-social: #b464dd;
-            --border-color-other: #888888;
+        @media not print {
+            :root {
+                --border-color-english: #2570e1;
+                --border-color-math: #e64b4b;
+                --border-color-japanese: #65bb4a;
+                --border-color-science: #ffa00b;
+                --border-color-social: #b464dd;
+                --border-color-other: #888888;
+            }
+
+            /* 連コマを横並びにするときのすきまを埋める空のカード */
+            .table-card.placeholder {
+                visibility: hidden;
+                pointer-events: none;
+            }
         }
         
         @media print {
