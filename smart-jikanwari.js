@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const shareButton = document.getElementById('shareButton');
     const showTagsCheckbox = document.getElementById('showTagsCheckbox');
     const separateVideoEtc = document.getElementById('separateVideoEtc');
-    // Added UI elements
     const panelToggleBtn = document.getElementById('panelToggleBtn');
     const panelBody = document.getElementById('panel-body');
     const clearDataButton = document.getElementById('clearDataButton');
@@ -66,7 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     ***********************************/
     const parseRawData = (text) => {
-        const lines = text.trim().split('\n'); // 受け取った文字列を行で分割した配列 cf. String.prototype.trim(), String.prototype.split()
+        // Remove blank/whitespace-only lines before interpretation (handles CRLF too)
+        const lines = text
+            .split('\n')
+            .map(l => l.replace(/\r/g, ''))
+            .filter(l => l.trim().length > 0);
         const schedule = [];
         const additionalSchedule = [];
         let currentTimeslot = '不明'; // 時限
@@ -76,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
         const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s); // e.g. 13:30 〜 14:30
-        const isHeader = (s) => s.startsWith('時限'); // 時限    学年    生徒氏名    教科名    ｱｲｺﾝ …… cf. String.prototype.startsWith()
+        const isHeader = (s) => s.startsWith('時限'); // 時限    学年    生徒氏名    教科名    ｱｲｺﾝ ……
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
         const isAdditional = (s) => (s == '追記');
@@ -236,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isTimeslotLetter(parts[0])) {
                     currentTimeslot = parts[0];
                     instructor = parts[1];
-                    content = parts.slice(2).join(' ');;
+                    content = parts.slice(2).join(' ');
                 } else if (isTimeslotLetter(parts[1])) {
                     currentTimeslot = parts[1];
                     instructor = parts[0];
@@ -262,16 +265,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     /**********************************
-     文字列（教科）を種にカラーコードを生成する // ToDo: 「数学」と「数学II」では違う色になる
+     文字列（教科）を種にカラーコードを生成する
     ***********************************/
     const stringToColor = (str) => {
-        let hash = 0;
+        const colorMap = {'英語': 'var(--border-color-english)',
+                          '数学': 'var(--border-color-math)',
+                          '算数': 'var(--border-color-math)',
+                          '国語': 'var(--border-color-japanese)',
+                          '理科': 'var(--border-color-science)',
+                          '社会': 'var(--border-color-social)',
+                          '閃き': 'var(--border-color-math)',
+                          '読書': 'var(--border-color-japanese)',
+                         };
+        let color = 'var(--border-color-other)';
+        for (let subject in colorMap) {
+            if (str.includes(subject)) {
+                color = colorMap[subject];
+                break;
+            }
+        }
+        
+        /*let hash = 0;
         for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash); // cf. ビット演算
         let color = '#';
         for (let i = 0; i < 3; i++) {
             const value = (hash >> (i * 8)) & 0xFF;
             color += ('00' + value.toString(16)).substr(-2);
-        }
+        }*/
+        
         return color;
     };
     
@@ -297,82 +318,78 @@ document.addEventListener('DOMContentLoaded', () => {
      テーブルのセルを生成する
     ***********************************/
     const generateCellContent = (cellData, rowAttr, colAttr) => {
-        let contentHtml = '<div class="flex flex-col gap-2">';
+        let contentHtml = '<div class="table-cell-content">';
         cellData.forEach(item => {
-            if (item && item.__placeholder) {
-                const potentialParts = [
-                    { key: '生徒情報', className: '' },
-                    { key: '教科', className: 'text-gray-600' },
-                    { key: '講師', className: 'text-gray-600' },
-                    { key: '時限（時間）', className: 'text-sm text-gray-500' },
-                    { key: 'タグ', className: 'text-xs text-gray-400' },
+            if (!item) return;
+            
+            let dataAttrs = '';
+            let color = '';
+            let parts = [];
+            if (item && item.__placeholder) { //連コマを横並びにするときのすきまを埋める空のカード
+                dataAttrs = 'placeholder';
+                color = 'transparent';
+                parts = [
+                    { key: '生徒情報', value: '&nbsp;', defaultClass: '' },
+                    { key: '教科', value: '&nbsp;', defaultClass: 'text-subject' },
+                    { key: '講師', value: '&nbsp;', defaultClass: 'text-class' },
+                    { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'タグ', value: '&nbsp;', defaultClass: 'text-icon' },
+                    { key: 'メモ', value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
-                let visibleParts = potentialParts.filter(p => p.key !== rowAttr && p.key !== colAttr);
-                if (!showTagsCheckbox.checked) {
-                    visibleParts = visibleParts.filter(p => p.key !== 'タグ');
-                }
-                let linesHtml = visibleParts.map((part, index) => {
-                    const cls = index === 0 ? `font-bold text-gray-800 ${part.className}`.trim() : part.className;
-                    return `<p class="${cls}">&nbsp;</p>`;
-                }).join('');
-                linesHtml += `<p class="text-xs text-red-500 font-semibold" style="min-height:2rem;max-height:2rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">&nbsp;</p>`;
-                contentHtml += `<div class="bg-white p-2 rounded-md border-l-4 flex flex-col justify-start class-card placeholder" style="border-color: transparent;">${linesHtml}</div>`;
-                return;
+            } else {
+                dataAttrs = `data-student="${escapeHTML(item['生徒情報'])}" data-timeslot="${escapeHTML(item['時限（時間）'])}"`;
+                color = stringToColor(item['教科']);
+                parts = [
+                    { key: '生徒情報', value: escapeHTML(item['生徒情報']) || '&nbsp;', defaultClass: '' },
+                    { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-subject' },
+                    { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-class' },
+                    { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'タグ', value: escapeHTML(item['タグ']) || '&nbsp;', defaultClass: 'text-icon' },
+                    { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-memo text-memo-table' },
+                ];
             }
-            const color = stringToColor(item['教科']);
-            const parts = [
-                { key: '生徒情報', value: escapeHTML(item['生徒情報']), className: '' },
-                { key: '教科', value: escapeHTML(item['教科']), className: 'text-gray-600' },
-                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}`, className: 'text-gray-600' },
-                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), className: 'text-sm text-gray-500' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), className: 'text-xs text-gray-400' },
-            ];
-            const memoText = (item['メモ'] || '').trim();
-            const renderMemo = (show) => {
-                const content = show && memoText ? escapeHTML(memoText) : '\u00A0';
-                return `<p class="text-xs text-red-500 font-semibold" style="min-height:2rem;max-height:2rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${content}</p>`;
-            };
+            
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (!showTagsCheckbox.checked) {
+            if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
                 visibleParts = visibleParts.filter(p => p.key !== 'タグ');
             }
-            let infoHtml = visibleParts.map((part, index) => {
-                const first = index === 0 ? 'font-bold text-gray-800' : '';
-                const cls = first ? `${first} ${part.className}`.trim() : part.className;
-                return `<p class="${cls}">${part.value}</p>`;
+            let infoHtml = visibleParts.map((p, i) => {
+                const cls = i === 0 ? 'text-first' : p.defaultClass;
+                return `<p class="${cls}">${p.value}</p>`;
             }).join('');
-            const tagUsedAsAxis = (rowAttr === 'タグ' || colAttr === 'タグ');
-            if (showTagsCheckbox.checked && !tagUsedAsAxis && !item['タグ']) {
-                infoHtml += `<p class="text-xs text-gray-400">&nbsp;</p>`;
-            }
-            const memoHtml = renderMemo(true);
-            const dataAttrs = `data-student="${escapeHTML(item['生徒情報'])}" data-timeslot="${escapeHTML(item['時限（時間）'])}` + `"`;
-            contentHtml += `<div class="bg-white p-2 rounded-md border-l-4 flex flex-col justify-start class-card" ${dataAttrs} style="border-color: ${color}; cursor: pointer;">${infoHtml}${memoHtml}</div>`;
+            
+            contentHtml += `<div class="table-card" ${dataAttrs} style="border-color: ${color}; cursor: pointer;">${infoHtml}</div>`;
         });
         return contentHtml + '</div>';
     };
     
+    
+    /**********************************
+     カードビューのセルを生成する
+    ***********************************/
     const generateCardContent = (items, rowAttr, colAttr) => {
         let contentHtml = '';
         items.forEach(item => {
+            if (!item) return;
+            
             const color = stringToColor(item['教科']);
-            const potentialParts = [
+            const parts = [
                 { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
-                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-gray-600' },
-                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-gray-600' },
-                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-sm text-gray-500' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-xs text-gray-400' },
-                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-xs text-red-500 font-semibold' }
+                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-subject' },
+                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-class' },
+                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-period' },
+                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-icon' },
+                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-memo' }
             ];
-            let visibleParts = potentialParts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
+            let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             if (!showTagsCheckbox.checked) {
                 visibleParts = visibleParts.filter(p => p.key !== 'タグ');
             }
-            const infoHtml = visibleParts.map((part, index) => {
-                const className = index === 0 ? 'font-bold text-gray-800' : part.defaultClass;
-                return `<p class="${className}">${part.value}</p>`;
+            const infoHtml = visibleParts.map((p, i) => {
+                const cls = i === 0 ? 'text-first' : p.defaultClass;
+                return `<p class="${cls}">${p.value}</p>`;
             }).join('');
-            contentHtml += `<div class="bg-gray-50 p-3 rounded-md border-l-4" style="border-color: ${color};">${infoHtml}</div>`;
+            contentHtml += `<div class="cardview-card" style="border-color: ${color};">${infoHtml}</div>`;
         });
         return contentHtml;
     };
@@ -404,6 +421,44 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     /**********************************
+     連コマの生徒を横並びにする関数
+    ***********************************/
+    const orderBySlots = (cellData, prevSlots) => {
+        const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
+        let used = new Set();
+        let slots = new Array(prevSlots.length).fill(null);
+        
+        // prevSlots[]にいる生徒がbyStudent{}（cellData[]）にもいたら、おなじindexでslots[]にいれる
+        for (let idx = 0; idx < prevSlots.length; idx++) {
+            const s = prevSlots[idx];
+            if (s && byStudent.has(s)) {
+                slots[idx] = byStudent.get(s);
+                used.add(s); // slots[]に入れたらused[]に記録する
+             }
+        }
+        
+        // まだslots[]にいれてないものを空いているindexでいれる
+        for (const [s, it] of byStudent.entries()) {
+            if (used.has(s)) continue;
+            
+            for (let idx = 0; idx < prevSlots.length; idx++) {
+                if (!slots[idx]) {
+                    slots[idx] = it;
+                    used.add(s);
+                    break;
+                }
+            }
+            
+            if (used.has(s)) continue;
+            slots.push(it);
+            used.add(s);
+        }
+        
+        const nextPrev = slots.map(it => it ? it['生徒情報'] : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
+        return { slots, nextPrev };
+    };
+    
+    /**********************************
      scheduleData[]と、入力している属性から、テーブルを生成する
     ***********************************/
     const renderTableView = () => {
@@ -432,66 +487,30 @@ document.addEventListener('DOMContentLoaded', () => {
             dataMap.get(rowKey).get(colKey).push(item);
         });
         
-        const orderBySlots = (cellData, prevSlots) => { // 連コマの生徒を横並びにする関数
-            const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
-            let used = new Set();
-            let slots = new Array(prevSlots.length).fill(null);
-            
-            // prevSlots[]にいる生徒がbyStudent{}（cellData[]）にもいたら、おなじindexでslots[]にいれる
-            for (let idx = 0; idx < prevSlots.length; idx++) {
-                const s = prevSlots[idx];
-                if (s && byStudent.has(s)) {
-                    slots[idx] = byStudent.get(s);
-                    used.add(s); // slots[]に入れたらused[]に記録する
-                }
-            }
-            
-            // まだslots[]にいれてないものを空いているindexでいれる
-            for (const [s, it] of byStudent.entries()) {
-                if (used.has(s)) continue;
-                
-                for (let idx = 0; idx < prevSlots.length; idx++) {
-                    if (!slots[idx]) {
-                        slots[idx] = it;
-                        used.add(s);
-                        break;
-                    }
-                }
-                
-                if (used.has(s)) continue;
-                slots.push(it);
-                used.add(s);
-            }
-            
-            
-            const nextPrev = slots.map(it => it ? it['生徒情報'] : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
-            return { slots, nextPrev };
-        };
-        
-        let tableHtml = '<div class="overflow-x-auto"><table class="min-w-full text-sm text-left text-gray-500">';
-        tableHtml += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
+        let tableHtml = '<div class="table-div"><table class="table-table">';
+        tableHtml += `<thead class="table-head sticky"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
         colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
-            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap sticky\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+            tableHtml += `<th scope="col" class="table-top" data-timeslot-col="${eh}">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
         
         rowHeaders.forEach(rowH => {
             // 右の見出し
             const erow = escapeHTML(rowH);
-            tableHtml += `<tr class=\"bg-white border-b hover:bg-gray-50\"><th scope=\"row\" class=\"py-3 px-4 font-bold text-gray-900 whitespace-nowrap bg-white border-r sticky left-0 z-10\" data-row-key=\"${erow}\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">${erow}</th>`;
+            tableHtml += `<tr class="table-row"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
             
             // セル
             let prevSlots = [];
             colHeaders.forEach(colH => {
                 const cellData = dataMap.get(rowH)?.get(colH);
                 let toRender = cellData;
-                if ( cellData && rowAttr === '講師' && colAttr === '時限（時間）') {
-                    const { slots, nextPrev } = orderBySlots(cellData, prevSlots);
+                if ( toRender && rowAttr === '講師' && colAttr === '時限（時間）') {
+                    const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
                 } // 連コマの生徒は横並びになるようにする
-                tableHtml += `<td class=\"py-2 px-2 align-top min-w-[200px]\" data-timeslot-col=\"${escapeHTML(colH)}\" data-row-key=\"${erow}\">`;
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
                 if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
@@ -500,17 +519,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (colAttr === '時限（時間）') { // 力シリーズ担当講師
-            tableHtml += `<tr class=\"bg-gray-50 border-t\"><th scope=\"row\" class=\"py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10\" data-row-key=\"力シリーズ担当講師\" style=\"box-shadow: 2px 0 0 rgba(0,0,0,0.05);\">力シリーズ担当講師</th>`;
+            tableHtml += `<tr class="table-row-power"><th scope="row" class="table-side-power" data-row-key="力シリーズ担当講師">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
-                tableHtml += `<td class=\"py-2 px-2 text-sm text-gray-700\" data-timeslot-col=\"${escapeHTML(colH)}\" data-row-key=\"力シリーズ担当講師\">${escapeHTML(name)}</td>`;
+                tableHtml += `<td class="table-cell-power" data-timeslot-col="${escapeHTML(colH)}" data-row-key="力シリーズ担当講師">${escapeHTML(name)}</td>`;
             });
         }
         
-        tableHtml += `</tbody><tfoot class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="py-3 px-4 font-bold whitespace-nowrap bg-gray-100 sticky left-0 z-20" style="box-shadow: 2px 0 0 rgba(0,0,0,0.05);">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `</tbody><tfoot class="table-head"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
         colHeaders.forEach(h => { // 下の見出し
             const eh = escapeHTML(h);
-            tableHtml += `<th scope=\"col\" class=\"py-3 px-4 font-semibold whitespace-nowrap\" data-timeslot-col=\"${eh}\">${eh}</th>`;
+            tableHtml += `<th scope="col" class="table-top" data-timeslot-col=\"${eh}\">${eh}</th>`;
         });
         tableHtml += `</tr></tfoot></table></div>`;
         
@@ -520,6 +539,9 @@ document.addEventListener('DOMContentLoaded', () => {
         applyZoom(currentZoom);
     };
     
+    /**********************************
+     テーブルに適用しているハイライトを消す
+    ***********************************/
     const clearHighlight = () => {
         tableContainer.querySelectorAll('[data-timeslot-col].col-highlight').forEach(el => {
             el.classList.remove('col-highlight');
@@ -527,22 +549,25 @@ document.addEventListener('DOMContentLoaded', () => {
         tableContainer.querySelectorAll('[data-row-key].row-highlight').forEach(el => {
             el.classList.remove('row-highlight');
         });
-        tableContainer.querySelectorAll('.class-card').forEach(card => {
+        tableContainer.querySelectorAll('.table-card').forEach(card => {
             card.classList.remove('card-highlight');
             card.classList.remove('card-selected');
         });
     };
-
+    
+    /**********************************
+     
+    ***********************************/
     const applyHighlight = () => {
         clearHighlight();
         if (currentView !== 'table') return;
         const rowAttr = rowSelector.value, colAttr = colSelector.value;
         if (!(rowAttr === '講師' && colAttr === '時限（時間）')) return;
         if (!selectedStudent || !selectedTimeslot) return;
-        const safeStudentSel = CSS.escape ? `.class-card[data-student="${selectedStudent}"]` : `.class-card`;
+        const safeStudentSel = CSS.escape ? `.table-card[data-student="${selectedStudent}"]` : `.table-card`;
         const cards = CSS.escape ? Array.from(tableContainer.querySelectorAll(safeStudentSel))
             .filter(c => c.getAttribute('data-student') === selectedStudent) :
-            Array.from(tableContainer.querySelectorAll('.class-card')).filter(c => c.getAttribute('data-student') === selectedStudent);
+            Array.from(tableContainer.querySelectorAll('.table-card')).filter(c => c.getAttribute('data-student') === selectedStudent);
         const timeslotsToHighlight = new Set(cards.map(c => c.getAttribute('data-timeslot')));
         timeslotsToHighlight.forEach(ts => {
             const sel = CSS.escape ? `[data-timeslot-col="${ts}"]` : '[data-timeslot-col]';
@@ -569,23 +594,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
-
+    
+    /**********************************
+     scheduleData[]と、入力している属性から、カードビューを生成する
+    ***********************************/
     const renderCardView = () => {
         const rowAttr = rowSelector.value, colAttr = colSelector.value;
          if (!rowAttr || !colAttr || rowAttr === colAttr) {
-            cardContainer.innerHTML = `<div class=\"p-8 text-center text-gray-500 bg-white rounded-lg shadow\">行と列に異なる属性を選択してください。</div>`; return;
+            cardContainer.innerHTML = `<div class="p-8 text-center text-gray-500 bg-white rounded-lg shadow">行と列に異なる属性を選択してください。</div>`; return;
         }
-        let rowHeaders = getHeaders(scheduleData, rowAttr);
-        if (rowAttr === '講師') {
-            const vlabel = '映像・学トレなど';
-            if (rowHeaders.includes(vlabel)) {
-                rowHeaders = rowHeaders.filter(h => h !== vlabel).concat([vlabel]);
-            }
+        
+        let schedule = scheduleData;
+        
+        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+            schedule = schedule.concat(additionalScheduleData);
         }
+        
+        let rowHeaders = getHeaders(schedule, rowAttr);
+        
         let cardHtml = '';
         rowHeaders.forEach(rowH => {
-            cardHtml += `<div class=\"bg-white rounded-xl shadow-lg overflow-hidden\"><div class=\"p-4 bg-gray-100 border-b\"><h3 class=\"font-bold text-lg text-gray-800\">${escapeHTML(rowH)}</h3></div>`;
-            const itemsForRow = scheduleData.filter(item => item[rowAttr] === rowH);
+            cardHtml += `<div class="cardview-div"><div class="cardview-first"><h3 class="cardview-first-index">${escapeHTML(rowH)}</h3></div>`;
+            const itemsForRow = schedule.filter(item => item[rowAttr] === rowH);
             const colHeaders = getHeaders(itemsForRow, colAttr);
             const groupedByCol = itemsForRow.reduce((acc, item) => {
                 const key = item[colAttr];
@@ -593,10 +623,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 acc[key].push(item);
                 return acc;
             }, {});
-            cardHtml += '<div class=\"p-4 space-y-4\">';
+            cardHtml += '<div class="cardview-first-content">';
             colHeaders.forEach(colKey => {
                 if (groupedByCol[colKey]) {
-                    cardHtml += `<div><h4 class=\"font-semibold text-md text-gray-700 mb-2 pb-1 border-b\">${escapeHTML(colKey)}</h4><div class=\"space-y-2\">`;
+                    cardHtml += `<div class="cardview-second"><h4 class="cardview-second-index">${escapeHTML(colKey)}</h4><div class="cardview-second-content">`;
                     cardHtml += generateCardContent(groupedByCol[colKey], rowAttr, colAttr);
                     cardHtml += `</div></div>`;
                 }
@@ -605,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         cardContainer.innerHTML = cardHtml;
     };
-
+    
     const setView = (view) => {
         currentView = view;
         if (view === 'table') {
@@ -623,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCardView();
         }
     };
-
+    
     const handleSaveAsImage = () => {
         const target = document.getElementById('table-container');
         const prevDisplay = target.style.display;
@@ -692,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saveImageButton.innerHTML = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" viewBox=\"0 0 16 16\"><path d=\"M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z\"/><path d=\"M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z\"/></svg> 画像として保存`;
         });
     };
-
+    
     const applyZoom = (scale) => {
         if (typeof scale !== 'number' || !isFinite(scale)) return;
         currentZoom = Math.min(Math.max(scale, ZOOM_MIN), ZOOM_MAX);
@@ -702,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             zoomSelect.value = String(pct);
         }
     };
-
+    
     const zoomStep = (dir) => {
         // Step by 10% per click
         const currentPct = Number(zoomSelect?.value) || Math.round(currentZoom * 100);
@@ -710,7 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         applyZoom(nextPct / 100);
         renderTableView();
     };
-
+    
     const buildShareUrl = () => {
         const text = rawDataEl.value || '';
         // Compress then Base64 encode
@@ -730,7 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
         u.searchParams.set('data64', data64);
         return u.toString();
     };
-
+    
     const handleShare = async () => {
         const url = buildShareUrl();
         shareButton.disabled = true;
@@ -758,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 1400);
         }
     };
-
+    
     const initialize = () => {
         const loadFromQuery = () => {
             try {
@@ -808,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('クエリからのデータ読込に失敗:', e);
             }
         };
-
+        
         loadFromQuery();
         [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
         // Build selector options from data or defaults
@@ -978,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });
         tableContainer.addEventListener('click', (e) => {
-            const card = e.target.closest('.class-card');
+            const card = e.target.closest('.table-card');
             if (!card) return;
             if (!(currentView === 'table' && rowSelector.value === '講師' && colSelector.value === '時限（時間）')) return;
             const student = card.getAttribute('data-student');
@@ -1006,6 +1036,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (_) { /* ignore */ }
     };
-
+    
     initialize();
 });
