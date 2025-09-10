@@ -16,11 +16,13 @@
         body {
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
         }
+        @media not print {
             /* スロット用プレースホルダー（空きスロットを目視上確保） */
             .class-card.placeholder {
                 visibility: hidden;
                 pointer-events: none;
             }
+        }
         .view-btn.active {
             background-color: #3b82f6;
             color: white;
