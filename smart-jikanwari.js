@@ -269,9 +269,9 @@ document.addEventListener('DOMContentLoaded', () => {
                           '読書': 'var(--border-color-japanese)',
                          };
         let color = 'var(--border-color-other)';
-        for (let subject of colorMap) {
+        for (let subject in colorMap) {
             if (str.includes(subject)) {
-                color = colorMap.subject;
+                color = colorMap[subject];
                 break;
             }
         }
