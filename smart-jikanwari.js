@@ -349,15 +349,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ];
             }
             
-            if (!showTagsCheckbox.checked) {
-                for (let p of parts) {
-                    if (p.key == 'タグ') {
-                        p.value = '&nbsp;';
-                        break;
-                    }
-                }
-            }
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
+            if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
+                visibleParts = visibleParts.filter(p => p.key !== 'タグ');
+            }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
                 return `<p class="${cls}">${p.value}</p>`;
