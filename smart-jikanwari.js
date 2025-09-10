@@ -259,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
      文字列（教科）を種にカラーコードを生成する
     ***********************************/
     const stringToColor = (str) => {
-        const colorMap = {'英語': '#2570e1',
+        const colorMap = {'英語': 'var(--border-color-english)',
                           '数学': 'var(--border-color-math)',
                           '算数': 'var(--border-color-math)',
                           '国語': 'var(--border-color-japanese)',
@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                           '読書': 'var(--border-color-japanese)',
                          };
         let color = 'var(--border-color-other)';
-        for (let subject in colorMap) {
+        for (let subject of colorMap) {
             if (str.includes(subject)) {
                 color = colorMap.subject;
                 break;
