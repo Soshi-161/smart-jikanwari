@@ -24,6 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
+    // 共有モーダル関連の要素参照
+    const shareModal = document.getElementById('shareModal');
+    const shareModalBackdrop = document.getElementById('shareModalBackdrop');
+    const shareModalDialog = document.getElementById('shareModalDialog');
+    const shareModalClose = document.getElementById('shareModalClose');
+    const shareUrlInput = document.getElementById('shareUrlInput');
+    const copyLinkButton = document.getElementById('copyLinkButton');
+    const qrCodeContainer = document.getElementById('qrCodeContainer');
     
     const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
     let scheduleData = [];
@@ -771,33 +779,35 @@ document.addEventListener('DOMContentLoaded', () => {
         u.searchParams.set('data64', data64);
         return u.toString();
     };
-    
-    const handleShare = async () => {
-        const url = buildShareUrl();
-        shareButton.disabled = true;
-        const original = shareButton.textContent;
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(url);
-            } else {
-                const temp = document.createElement('textarea');
-                temp.value = url;
-                document.body.appendChild(temp);
-                temp.select();
-                document.execCommand('copy');
-                document.body.removeChild(temp);
-            }
-            shareButton.textContent = 'コピーしました';
-        } catch (e) {
-            console.warn('クリップボードへのコピーに失敗:', e);
-            shareButton.textContent = 'URLを表示';
-            alert(url);
-        } finally {
-            setTimeout(() => {
-                shareButton.textContent = original;
-                shareButton.disabled = false;
-            }, 1400);
+
+    // 共有モーダルを開く: 入力欄にURLをセットし、QRコードを生成
+    const openShareModal = (prebuiltUrl) => {
+        if (!shareModal) return;
+        const url = prebuiltUrl || buildShareUrl();
+        if (shareUrlInput) {
+            shareUrlInput.value = url;
+            try { shareUrlInput.focus(); shareUrlInput.select(); } catch (_) { /* ignore */ }
         }
+        if (qrCodeContainer) {
+        // 既存のQRコードをクリア
+            qrCodeContainer.innerHTML = '';
+            try {
+                // eslint-disable-next-line no-undef
+                new QRCode(qrCodeContainer, { text: url, width: 500, height: 500, correctLevel: QRCode.CorrectLevel.M });
+            } catch (e) {
+                const msg = document.createElement('div');
+                msg.className = 'text-xs text-gray-500';
+                msg.textContent = 'QRコードの生成に失敗しました。';
+                qrCodeContainer.appendChild(msg);
+            }
+        }
+    shareModal.classList.remove('hidden');
+    };
+    // 共有モーダルを閉じる（QR領域もクリア）
+    const closeShareModal = () => {
+        if (!shareModal) return;
+    shareModal.classList.add('hidden');
+        if (qrCodeContainer) qrCodeContainer.innerHTML = '';
     };
     
     const initialize = () => {
@@ -878,7 +888,58 @@ document.addEventListener('DOMContentLoaded', () => {
         tableViewBtn.addEventListener('click', () => setView('table'));
         cardViewBtn.addEventListener('click', () => setView('card'));
         saveImageButton.addEventListener('click', handleSaveAsImage);
-        shareButton.addEventListener('click', handleShare);
+        // 共有モーダルを開く
+        shareButton.addEventListener('click', () => openShareModal());
+        // モーダルを閉じる操作（背景クリック・×ボタン・Escキー）
+        if (shareModalBackdrop) shareModalBackdrop.addEventListener('click', closeShareModal);
+        // ダイアログ外クリックで閉じる
+        if (shareModal) {
+            shareModal.addEventListener('mousedown', (e) => {
+                if (!shareModalDialog) return;
+                const target = e.target;
+                if (!shareModalDialog.contains(target)) closeShareModal();
+            });
+            // タッチデバイス対応
+            shareModal.addEventListener('touchstart', (e) => {
+                if (!shareModalDialog) return;
+                const touch = e.touches && e.touches[0];
+                const target = touch ? document.elementFromPoint(touch.clientX, touch.clientY) : e.target;
+                if (target && !shareModalDialog.contains(target)) closeShareModal();
+            }, { passive: true });
+        }
+        if (shareModalClose) shareModalClose.addEventListener('click', closeShareModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && shareModal && !shareModal.classList.contains('hidden')) closeShareModal();
+        });
+        // 「リンクをコピー」ボタン: 共有URLをクリップボードへコピー
+        if (copyLinkButton) {
+            copyLinkButton.addEventListener('click', async () => {
+                const url = (shareUrlInput && shareUrlInput.value) || buildShareUrl();
+                copyLinkButton.disabled = true;
+                const original = copyLinkButton.textContent;
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(url);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = url;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    copyLinkButton.textContent = 'コピーしました';
+                } catch (e) {
+                    console.warn('クリップボードへのコピーに失敗:', e);
+                    alert(url);
+                } finally {
+                    setTimeout(() => {
+                        copyLinkButton.textContent = original || 'リンクをコピー';
+                        copyLinkButton.disabled = false;
+                    }, 1200);
+                }
+            });
+        }
         if (separateVideoEtc) {
             separateVideoEtc.addEventListener('change', () => {
                 [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
