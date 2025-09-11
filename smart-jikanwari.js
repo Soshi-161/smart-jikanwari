@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
-                visibleParts = visibleParts.filter(p => p.key !== 'タグ');
+                visibleParts = visibleParts.filter(p => p.key !== 'タグ' && p.key !== 'メモ');
             }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -363,7 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return contentHtml + '</div>';
     };
-    
     
     /**********************************
      カードビューのセルを生成する
@@ -495,6 +494,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHtml += `<th scope="col" class="table-top" data-timeslot-col="${eh}">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
+        
+        if (colAttr === '時限（時間）') { // 面談等のメモ
+            tableHtml += `<tr class="table-row"><th scope="row" class="table-side h-[7em]"></th>`;
+            colHeaders.forEach(colH => {
+                const name = videoInstructorByTimeslot.get(colH) || '—';
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+            });
+        }
         
         rowHeaders.forEach(rowH => {
             // 右の見出し
