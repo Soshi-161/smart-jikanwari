@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     
+    const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
     let scheduleData = [];
     let additionalScheduleData = [];
     let videoInstructorByTimeslot = new Map();
@@ -36,8 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentZoom = 1;
     // Zoom is now controlled as percent 30-150 via a numeric input; internal scale remains 0.3-1.5
     const ZOOM_MIN = 0.3, ZOOM_MAX = 1.5;
-    // Built-in default attribute choices when no data is present
-    const DEFAULT_ATTRIBUTES = ['生徒情報','時限（時間）','教科','講師','タグ','メモ'];
     
     /**********************************
      文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
@@ -56,13 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
     /**********************************
      生のテキストを受け取り、オブジェクトに変換して返す。オブジェクトの形式は
         {
-            '生徒情報': 生徒氏名（学年）,
-            '時限（時間）': 時限（時間）,
-            '教科': 教科,
-            '講師': 講師名または授業種別,
-            'タグ': アイコンなど,
-            'メモ': メモ欄,
-            '学年': 生徒の学年,
+            student: 生徒氏名,
+            period:  時限（時間）,
+            subject: 教科,
+            lesson:  講師名または授業種別,
+            icon:    アイコン,
+            memo:    メモ欄,
+            grade:   生徒の学年,
         }
     ***********************************/
     const parseRawData = (text) => {
@@ -87,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAdditional = (s) => (s == '追記');
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
         
-        const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効時限', '重要'];
+        const knownIcons = {'出席': '出', '欠席': '欠', '追加受講': '追', '振替': '振', 'SNET振替': '振', '講習会': '講', 'マンツーマン': '１', '有効時限': '有', '重要': '重'};
         
         const parseVideoStudent = (line) => {
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`; // 時限
@@ -96,13 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (parts.length < 4) { // partsの要素は4以上とする e.g. 中１    個別二俣川太郎    英語 学    振替
                 return { // 想定外の入力でも何かしら返す
-                    '生徒情報': `${line}`,
-                    '時限（時間）': timeslotInfo,
-                    '教科': '',
-                    '講師': 'その他',
-                    'タグ': '',
-                    'メモ': '',
-                    '学年': '',
+                    student: line,
+                    period:  timeslotInfo,
+                    subject: '',
+                    lesson:  'その他',
+                    icon:    '',
+                    memo:    '',
+                    grade:   '',
                 };
             }
             
@@ -127,19 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             let j = 4;
-            while (j < parts.length && knownIcons.indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
-            const icons = parts.slice(4, j).map( s => `<span class="border">${s.charAt(0)}</span>` );
+            while (j < parts.length && Object.keys(knownIcons).indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
+            const icons = parts.slice(4, j).map( s => `<span class="border">${knownIcons[s]}</span>` );
             const memo  = parts.slice(j).filter(Boolean);
             if (memo.length > 0) memoExist = true;
             
             return {
-                '生徒情報': `${studentName}（${grade}）`,
-                '時限（時間）': timeslotInfo,
-                '教科': subject,
-                '講師': lessonType,
-                'タグ': icons.join(' '),
-                'メモ': memo.join(' '),
-                '学年': grade,
+                student: studentName,
+                period:  timeslotInfo,
+                subject: subject,
+                lesson:  lessonType,
+                icon:    icons.join(' '),
+                memo:    memo.join(' '),
+                grade:   grade,
             };
         };
         
@@ -152,13 +151,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (line1Parts.length != 2) { // line1には学年と生徒氏名が必要
                 return { // 想定外の入力でも何かしら返す
-                    '生徒情報': `${line1} ${line2} ${line3}`,
-                    '時限（時間）': timeslotInfo,
-                    '教科': '',
-                    '講師': '個別 その他',
-                    'タグ': '',
-                    'メモ': '',
-                    '学年': '',
+                    student: `${line1} ${line2} ${line3}`,
+                    period:  timeslotInfo,
+                    subject: '',
+                    lesson:  '個別 その他',
+                    icon:    '',
+                    memo:    '',
+                    grade:   '',
                 };
             }
             
@@ -166,23 +165,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentName = line1Parts[1];
             
             const subject = line2Parts[0] || '';
-            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border">${s.charAt(0)}</span>` );
+            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border">${knownIcons[s] || s}</span>` );
             
             let j = 0;
-            while (j < line3Parts.length && knownIcons.indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
-            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border">${s.charAt(0)}</span>` );
+            while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
+            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border">${knownIcons[s]}</span>` );
             const instructor = line3Parts[j] || '個別 その他';
             const memo  = line3Parts.slice(j+1).filter(Boolean);
             if (memo.length > 0) memoExist = true;
             
             return {
-                '生徒情報': `${studentName}（${grade}）`,
-                '時限（時間）': timeslotInfo,
-                '教科': subject,
-                '講師': instructor,
-                'タグ': [...iconsFromLine2, ...iconsFromLine3].join(' '),
-                'メモ': memo.join(' '),
-                '学年': grade,
+                student: studentName,
+                period:  timeslotInfo,
+                subject: subject,
+                lesson:  instructor,
+                icon:    [...iconsFromLine2, ...iconsFromLine3].join(' '),
+                memo:    memo.join(' '),
+                grade:   grade,
             };
         };
         
@@ -252,13 +251,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (instructor != '') {
                     additionalSchedule.push({
-                        '生徒情報': content,
-                        '時限（時間）': timeslotMap[currentTimeslot],
-                        '教科': content,
-                        '講師': instructor,
-                        'タグ': '',
-                        'メモ': '',
-                        '学年': '',
+                        student: content,
+                        period:  timeslotMap[currentTimeslot],
+                        subject: content,
+                        lesson:  instructor,
+                        icon:    '',
+                        memo:    '',
+                        grade:   '',
                     });
                 }
                 
@@ -334,28 +333,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 extraClass = 'placeholder';
                 color = 'transparent';
                 parts = [
-                    { key: '生徒情報', value: '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: '&nbsp;', defaultClass: 'text-subject' },
-                    { key: '講師', value: '&nbsp;', defaultClass: 'text-class' },
-                    { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'メモ', value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
+                    { key: 'student', value: '&nbsp;', defaultClass: '' },
+                    { key: 'subject', value: '&nbsp;', defaultClass: 'text-subject' },
+                    { key: 'lesson',  value: '&nbsp;', defaultClass: 'text-lesson' },
+                    { key: 'period',  value: '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'memo',    value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             } else {
-                dataAttrs = `data-student="${escapeHTML(item['生徒情報'])}" data-timeslot="${escapeHTML(item['時限（時間）'])}"`;
-                color = stringToColor(item['教科']);
+                dataAttrs = `data-student="${escapeHTML(item.student)}" data-timeslot="${escapeHTML(item.period)}"`;
+                color = stringToColor(item.subject);
                 parts = [
-                    { key: '生徒情報', value: escapeHTML(item['生徒情報']) || '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-subject' },
-                    { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-class' },
-                    { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-memo text-memo-table' },
+                    { key: 'student', value: `${escapeHTML(item.student)}（${escapeHTML(item.grade)}）`, defaultClass: '' },
+                    { key: 'subject', value: escapeHTML(item.subject) || '&nbsp;', defaultClass: 'text-subject' },
+                    { key: 'lesson',  value: `授業: ${escapeHTML(item.lesson)}`,    defaultClass: 'text-lesson' },
+                    { key: 'period',  value: escapeHTML(item.period) || '&nbsp;',  defaultClass: 'text-period' },
+                    { key: 'memo',    value: escapeHTML(item.memo) || '&nbsp;',    defaultClass: 'text-memo text-memo-table' },
                 ];
             }
             
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (item['タグ']) visibleParts[visibleParts.length - 2].value += ` <span class="text-icon">${item['タグ']}</span>`;
+            if (item.icon) visibleParts[1].value += ` <span class="text-icon">${item.icon}</span>`;
             if (!memoExist) { // メモが一つでもある場合はメモを表示
-                visibleParts = visibleParts.filter(p => p.key !== 'メモ');
+                visibleParts = visibleParts.filter(p => p.key !== 'memo');
             }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -375,18 +374,18 @@ document.addEventListener('DOMContentLoaded', () => {
         items.forEach(item => {
             if (!item) return;
             
-            const color = stringToColor(item['教科']);
+            const color = stringToColor(item.subject);
             const parts = [
-                { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
-                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-subject' },
-                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-class' },
-                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-period' },
-                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-memo' }
+                { key: 'student', value: `${escapeHTML(item.student)}（${escapeHTML(item.grade)}）`, defaultClass: '' },
+                { key: 'subject', value: escapeHTML(item.subject) || '&nbsp;', defaultClass: 'text-subject' },
+                { key: 'lesson',  value: `授業: ${escapeHTML(item.lesson)}`,    defaultClass: 'text-lesson' },
+                { key: 'period',  value: escapeHTML(item.period) || '&nbsp;',  defaultClass: 'text-period' },
+                { key: 'memo',    value: escapeHTML(item.memo) || '&nbsp;',    defaultClass: 'text-memo' },
             ];
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (item['タグ']) visibleParts[visibleParts.length - 2].value += ` <span class="text-icon">${item['タグ']}</span>`;
-            if (!memoExist) { // タグを表示/非表示で高さを変える
-                visibleParts = visibleParts.filter(p => p.key !== 'メモ');
+            if (item.icon) visibleParts[1].value += ` <span class="text-icon">${item.icon}</span>`;
+            if (!memoExist) { // メモが一つでもある場合はメモを表示
+                visibleParts = visibleParts.filter(p => p.key !== 'memo');
             }
             const infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -401,15 +400,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と見出しの属性を受け取る。scheduleData[]から属性を取り出し、並び替える
     ***********************************/
     const getHeaders = (data, attr) => {
-        if (attr === '生徒情報') {
-            const uniqueStudents = Array.from(new Map(data.map(item => [item['生徒情報'], item])).values()); // 生徒情報のかぶりを消す
+        if (attr === 'student') {
+            const uniqueStudents = Array.from(new Map(data.map(item => [item.student, item])).values()); // 生徒情報のかぶりを消す
             uniqueStudents.sort((a, b) => { // まず学年で並べ替え、次に名前で並べ替える
-                const gradeComparison = gradeToValue(b['学年']) - gradeToValue(a['学年']);
+                const gradeComparison = gradeToValue(b.grade) - gradeToValue(a.grade);
                 if (gradeComparison !== 0) return gradeComparison;
-                return a['生徒情報'].localeCompare(b['生徒情報'], 'ja');
+                return a.student.localeCompare(b.student, 'ja');
             });
-            return uniqueStudents.map(item => item['生徒情報']);
-        } else if (attr === '講師') {
+            return uniqueStudents.map(item => item.student);
+        } else if (attr === 'lesson') {
             const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
             return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
                 if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
@@ -427,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
      連コマの生徒を横並びにする関数
     ***********************************/
     const orderBySlots = (cellData, prevSlots) => {
-        const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
+        const byStudent = new Map(cellData.map(it => [it.student, it]));
         let used = new Set();
         let slots = new Array(prevSlots.length).fill(null);
         
@@ -457,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
             used.add(s);
         }
         
-        const nextPrev = slots.map(it => it ? it['生徒情報'] : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
+        const nextPrev = slots.map(it => it ? it.student : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
         return { slots, nextPrev };
     };
     
@@ -465,14 +464,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と、入力している属性から、テーブルを生成する
     ***********************************/
     const renderTableView = () => {
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
+        const rowAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === rowSelector.value); // rowSelector.value == '授業・講師' なら rowAttr === 'lesson'
+        const colAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === colSelector.value); // colSelector.value == '時限' なら colAttr === 'period'
         if (!rowAttr || !colAttr || rowAttr === colAttr) {
             tableContainer.innerHTML = `<div class="p-8 text-center text-gray-500">行と列に異なる属性を選択してください。</div>`; return;
         }
         
         let schedule = scheduleData;
         
-        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+        if (rowAttr === 'lesson' || colAttr === 'lesson') { // 行と列のどちらかが講師なら追記を表示する
             schedule = schedule.concat(additionalScheduleData);
         }
         
@@ -491,14 +491,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         let tableHtml = '<div class="table-div"><table class="table-table">';
-        tableHtml += `<thead class="table-head sticky"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `<thead class="table-head sticky"><tr><th scope="col" class="table-top-side">${escapeHTML(attributeMap[rowAttr])} ＼ ${escapeHTML(attributeMap[colAttr])}</th>`;
         colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope="col" class="table-top" data-timeslot-col="${eh}">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
         
-        if (colAttr === '時限（時間）') { // 面談等のメモ
+        if (colAttr === 'period') { // 面談等のメモ
             tableHtml += `<tr class="table-row"><th scope="row" class="table-side h-[7em]"></th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
@@ -516,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
             colHeaders.forEach(colH => {
                 const cellData = dataMap.get(rowH)?.get(colH);
                 let toRender = cellData;
-                if ( toRender && rowAttr === '講師' && colAttr === '時限（時間）') {
+                if ( toRender && rowAttr === 'lesson' && colAttr === 'period') {
                     const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHtml += `</tr>`;
         });
         
-        if (colAttr === '時限（時間）') { // 力シリーズ担当講師
+        if (colAttr === 'period') { // 力シリーズ担当講師
             tableHtml += `<tr class="table-row-power"><th scope="row" class="table-side-power" data-row-key="力シリーズ担当講師">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
@@ -537,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        tableHtml += `</tbody><tfoot class="table-head"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `</tbody><tfoot class="table-head"><tr><th scope="col" class="table-top-side">${escapeHTML(attributeMap[rowAttr])} ／ ${escapeHTML(attributeMap[colAttr])}</th>`;
         colHeaders.forEach(h => { // 下の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope="col" class="table-top" data-timeslot-col=\"${eh}\">${eh}</th>`;
@@ -572,8 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const applyHighlight = () => {
         clearHighlight();
         if (currentView !== 'table') return;
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
-        if (!(rowAttr === '講師' && colAttr === '時限（時間）')) return;
+        if (!(rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
         if (!selectedStudent || !selectedTimeslot) return;
         const safeStudentSel = CSS.escape ? `.table-card[data-student="${selectedStudent}"]` : `.table-card`;
         const cards = CSS.escape ? Array.from(tableContainer.querySelectorAll(safeStudentSel))
@@ -610,14 +609,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と、入力している属性から、カードビューを生成する
     ***********************************/
     const renderCardView = () => {
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
+        const rowAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === rowSelector.value); // rowSelector.value == '授業・講師' なら rowAttr === 'lesson'
+        const colAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === colSelector.value); // colSelector.value == '時限' なら colAttr === 'period'
          if (!rowAttr || !colAttr || rowAttr === colAttr) {
             cardContainer.innerHTML = `<div class="p-8 text-center text-gray-500 bg-white rounded-lg shadow">行と列に異なる属性を選択してください。</div>`; return;
         }
         
         let schedule = scheduleData;
         
-        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+        if (rowAttr === 'lesson' || colAttr === 'lesson') { // 行と列のどちらかが講師なら追記を表示する
             schedule = schedule.concat(additionalScheduleData);
         }
         
@@ -853,22 +853,16 @@ document.addEventListener('DOMContentLoaded', () => {
         loadFromQuery();
         [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
         // Build selector options from data or defaults
-        const attributes = scheduleData.length > 0
-            ? Object.keys(scheduleData[0]).filter(key => key !== '学年')
-            : DEFAULT_ATTRIBUTES.slice();
+        const attributes = Object.values(attributeMap);
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
-            rowSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
-            colSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
+            rowSelector.innerHTML += `<option value="${attr}">${attr}</option>`;
+            colSelector.innerHTML += `<option value="${attr}">${attr}</option>`;
         });
         // Set sensible defaults
-        if (attributes.includes('講師') && attributes.includes('時限（時間）')) {
-            rowSelector.value = '講師';
-            colSelector.value = '時限（時間）';
-        } else if (attributes.length >= 2) {
-            rowSelector.value = attributes[0];
-            colSelector.value = attributes[1];
-        }
+        rowSelector.value = attributeMap.lesson;
+        colSelector.value = attributeMap.period;
+        
         rawDataEl.addEventListener('input', () => {
            [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
@@ -1020,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableContainer.addEventListener('click', (e) => {
             const card = e.target.closest('.table-card');
             if (!card) return;
-            if (!(currentView === 'table' && rowSelector.value === '講師' && colSelector.value === '時限（時間）')) return;
+            if (!(currentView === 'table' && rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
             const student = card.getAttribute('data-student');
             const timeslot = card.getAttribute('data-timeslot');
             if (selectedStudent === student && selectedTimeslot === timeslot) {
