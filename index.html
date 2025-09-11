@@ -142,8 +142,7 @@
             }
             
             .text-memo-table {
-                min-height: 2rem;
-                max-height: 2rem;
+                height: 2rem;
                 overflow: hidden; /* cf. line-clamp */
                 display: -webkit-box;
                 -webkit-line-clamp: 2;
@@ -180,6 +179,35 @@
                 left: 0;
                 z-index: 10;
             }
+            
+            .view-btn.active {
+                background-color: #3b82f6;
+                color: white;
+                box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px 0 rgb(0 0 0 / 0.06);
+            }
+            
+            /* ハイライト用（Tailwind CDNは動的クラス未検出のため純CSSで定義） */
+            :root {
+                .col-highlight {
+                    background-color: #dbeafe; /* tailwind blue-100, 濃いめ */
+                }
+                .card-highlight {
+                    outline: 2px solid #d97706; /* amber-600: 濃いめ */
+                    outline-offset: 0px;
+                    background-color: #ffedd5; /* amber-100: 濃いめ */
+                }
+                .card-selected {
+                    outline: 2px solid #dc2626; /* red-600: 濃いめ */
+                    background-color: #fca5a5; /* red-300: 濃いめ */
+                }
+                .row-highlight {
+                    background-color: #cffafe; /* cyan-100: 濃いめ */
+                }
+                /* Intersection of row and column highlights: blended color (やや濃く) */
+                .col-highlight.row-highlight {
+                    background-color: #cfeffd; /* approx blend of blue-100 and cyan-100 */
+                }
+            }
         }
         
         @media print {
@@ -191,36 +219,13 @@
                 --border-color-social: #444;
                 --border-color-other: #666;
             }
+            
+            :root .text-memo {
+                color: unset;
+            }
         }
         @page {
             size: B4;
-        }
-        
-        .view-btn.active {
-            background-color: #3b82f6;
-            color: white;
-            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px 0 rgb(0 0 0 / 0.06);
-        }
-        
-        /* ハイライト用（Tailwind CDNは動的クラス未検出のため純CSSで定義） */
-        :root .col-highlight {
-            background-color: #dbeafe; /* tailwind blue-100, 濃いめ */
-        }
-        :root .card-highlight {
-            outline: 2px solid #d97706; /* amber-600: 濃いめ */
-            outline-offset: 0px;
-            background-color: #ffedd5; /* amber-100: 濃いめ */
-        }
-        :root .card-selected {
-            outline: 2px solid #dc2626; /* red-600: 濃いめ */
-            background-color: #fca5a5; /* red-300: 濃いめ */
-        }
-        :root .row-highlight {
-            background-color: #cffafe; /* cyan-100: 濃いめ */
-        }
-        /* Intersection of row and column highlights: blended color (やや濃く) */
-        :root .col-highlight.row-highlight {
-            background-color: #cfeffd; /* approx blend of blue-100 and cyan-100 */
         }
         
         /* Zoom scaling for table view */
@@ -285,10 +290,6 @@
                                     <span class="text-sm font-medium text-gray-600">表示モード:</span>
                                     <button id="tableViewBtn" class="view-btn font-medium py-2 px-4 rounded-lg text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition">テーブル</button>
                                     <button id="cardViewBtn" class="view-btn font-medium py-2 px-4 rounded-lg text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition">カード</button>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <input id="showTagsCheckbox" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
-                                    <label for="showTagsCheckbox" class="text-sm font-medium text-gray-700">タグを表示</label>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input id="separateVideoEtc" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">

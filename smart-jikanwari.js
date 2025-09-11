@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardViewBtn = document.getElementById('cardViewBtn');
     const saveImageButton = document.getElementById('saveImageButton');
     const shareButton = document.getElementById('shareButton');
-    const showTagsCheckbox = document.getElementById('showTagsCheckbox');
     const separateVideoEtc = document.getElementById('separateVideoEtc');
     const panelToggleBtn = document.getElementById('panelToggleBtn');
     const panelBody = document.getElementById('panel-body');
@@ -28,10 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let scheduleData = [];
     let additionalScheduleData = [];
+    let videoInstructorByTimeslot = new Map();
+    let memoExist = false;
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
-    let videoInstructorByTimeslot = new Map();
+    
     let currentZoom = 1;
     // Zoom is now controlled as percent 30-150 via a numeric input; internal scale remains 0.3-1.5
     const ZOOM_MIN = 0.3, ZOOM_MAX = 1.5;
@@ -76,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let currentTime = '不明'; // 時限の時刻範囲
         let mode = 'unknown'; // video: 映像・学トレなど, individual: 個別授業, additional: 追記
         videoInstructorByTimeslot = new Map(); // 初期化
+        memoExist = false;
         
         const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
         const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s); // e.g. 13:30 〜 14:30
@@ -126,8 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let j = 4;
             while (j < parts.length && knownIcons.indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
-            const icons = parts.slice(4, j).filter(Boolean);
+            const icons = parts.slice(4, j).map( s => `<span class="border">${s.charAt(0)}</span>` );
             const memo  = parts.slice(j).filter(Boolean);
+            if (memo.length > 0) memoExist = true;
             
             return {
                 '生徒情報': `${studentName}（${grade}）`,
@@ -163,13 +166,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentName = line1Parts[1];
             
             const subject = line2Parts[0] || '';
-            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個'); // 「個」は無視する
+            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border">${s.charAt(0)}</span>` );
             
             let j = 0;
             while (j < line3Parts.length && knownIcons.indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
-            const iconsFromLine3 = line3Parts.slice(0, j).filter(Boolean);
+            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border">${s.charAt(0)}</span>` );
             const instructor = line3Parts[j] || '個別 その他';
             const memo  = line3Parts.slice(j+1).filter(Boolean);
+            if (memo.length > 0) memoExist = true;
             
             return {
                 '生徒情報': `${studentName}（${grade}）`,
@@ -334,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     { key: '教科', value: '&nbsp;', defaultClass: 'text-subject' },
                     { key: '講師', value: '&nbsp;', defaultClass: 'text-class' },
                     { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'タグ', value: '&nbsp;', defaultClass: 'text-icon' },
                     { key: 'メモ', value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             } else {
@@ -345,15 +348,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-subject' },
                     { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-class' },
                     { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'タグ', value: escapeHTML(item['タグ']) || '&nbsp;', defaultClass: 'text-icon' },
                     { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             }
             
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
-                visibleParts = visibleParts.filter(p => p.key !== 'タグ' && p.key !== 'メモ');
-                if (item['メモ']) visibleParts[visibleParts.length - 1].value += `&nbsp;<span class="text-memo">${escapeHTML(item['メモ'])}</span>`;
+            if (item['タグ']) visibleParts[visibleParts.length - 2].value += ` <span class="text-icon">${item['タグ']}</span>`;
+            if (!memoExist) { // メモが一つでもある場合はメモを表示
+                visibleParts = visibleParts.filter(p => p.key !== 'メモ');
             }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -379,12 +381,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-subject' },
                 { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-class' },
                 { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-period' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-icon' },
                 { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-memo' }
             ];
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (!showTagsCheckbox.checked) {
-                visibleParts = visibleParts.filter(p => p.key !== 'タグ');
+            if (item['タグ']) visibleParts[visibleParts.length - 2].value += ` <span class="text-icon">${item['タグ']}</span>`;
+            if (!memoExist) { // タグを表示/非表示で高さを変える
+                visibleParts = visibleParts.filter(p => p.key !== 'メモ');
             }
             const infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -883,7 +885,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cardViewBtn.addEventListener('click', () => setView('card'));
         saveImageButton.addEventListener('click', handleSaveAsImage);
         shareButton.addEventListener('click', handleShare);
-        showTagsCheckbox.addEventListener('change', () => setView(currentView));
         if (separateVideoEtc) {
             separateVideoEtc.addEventListener('change', () => {
                 [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
