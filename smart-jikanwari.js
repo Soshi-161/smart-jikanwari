@@ -353,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
                 visibleParts = visibleParts.filter(p => p.key !== 'タグ' && p.key !== 'メモ');
+                if (item['メモ']) visibleParts[visibleParts.length - 1].value += `&nbsp;<span class="text-memo">${escapeHTML(item['メモ'])}</span>`;
             }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
