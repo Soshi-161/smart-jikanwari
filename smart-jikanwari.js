@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const shareUrlInput = document.getElementById('shareUrlInput');
     const copyLinkButton = document.getElementById('copyLinkButton');
     const qrCodeContainer = document.getElementById('qrCodeContainer');
+    // 共有モーダル: リサイズ処理用ハンドラ参照
+    let qrResizeHandler = null;
+    let qrResizeTimer = null;
     
     const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
     let scheduleData = [];
@@ -780,6 +783,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return u.toString();
     };
 
+    // 内部関数: 表示領域に応じてQRコードの推奨サイズを計算
+    const computeQrSize = () => {
+        // モーダルの横幅（パディング込み）を取得し、QRの最大幅を算出
+        const dialogW = shareModalDialog ? shareModalDialog.clientWidth : Math.min(window.innerWidth * 0.95, 560);
+        // QR表示ボックスの左右パディング(p-3=12px)と余白を考慮して少し小さめに
+        const widthBound = Math.max(120, Math.floor(dialogW - 48));
+        // 縦方向はビューポート高の55%を上限にして、見切れ防止
+        const heightBound = Math.max(120, Math.floor(window.innerHeight * 0.55));
+        // 絶対上限を設けつつ、最小は160pxに
+        const size = Math.min(420, widthBound, heightBound);
+        return Math.max(160, size);
+    };
+
+    // 内部関数: 指定URLでQRを再描画（サイズは自動計算）
+    const renderQr = (url) => {
+        if (!qrCodeContainer) return;
+        qrCodeContainer.innerHTML = '';
+        try {
+            const size = computeQrSize();
+            // eslint-disable-next-line no-undef
+            new QRCode(qrCodeContainer, { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+        } catch (e) {
+            const msg = document.createElement('div');
+            msg.className = 'text-xs text-gray-500';
+            msg.textContent = 'QRコードの生成に失敗しました。';
+            qrCodeContainer.appendChild(msg);
+        }
+    };
+
     // 共有モーダルを開く: 入力欄にURLをセットし、QRコードを生成
     const openShareModal = (prebuiltUrl) => {
         if (!shareModal) return;
@@ -788,26 +820,32 @@ document.addEventListener('DOMContentLoaded', () => {
             shareUrlInput.value = url;
             try { shareUrlInput.focus(); shareUrlInput.select(); } catch (_) { /* ignore */ }
         }
-        if (qrCodeContainer) {
-        // 既存のQRコードをクリア
-            qrCodeContainer.innerHTML = '';
-            try {
-                // eslint-disable-next-line no-undef
-                new QRCode(qrCodeContainer, { text: url, width: 500, height: 500, correctLevel: QRCode.CorrectLevel.M });
-            } catch (e) {
-                const msg = document.createElement('div');
-                msg.className = 'text-xs text-gray-500';
-                msg.textContent = 'QRコードの生成に失敗しました。';
-                qrCodeContainer.appendChild(msg);
-            }
+        // モーダルサイズを画面にフィット
+        if (shareModalDialog) {
+            shareModalDialog.style.maxWidth = Math.floor(Math.min(window.innerWidth * 0.95, 560)) + 'px';
+            shareModalDialog.style.width = '100%';
+            shareModalDialog.style.maxHeight = Math.floor(window.innerHeight * 0.9) + 'px';
+            shareModalDialog.style.overflowY = 'auto';
         }
-    shareModal.classList.remove('hidden');
+        // まず表示してからレイアウト計測し、QR描画
+        shareModal.classList.remove('hidden');
+        requestAnimationFrame(() => renderQr(url));
+        // リサイズで再描画（デバウンス付き）
+        qrResizeHandler = () => {
+            if (qrResizeTimer) clearTimeout(qrResizeTimer);
+            qrResizeTimer = setTimeout(() => renderQr(url), 120);
+        };
+        window.addEventListener('resize', qrResizeHandler);
     };
     // 共有モーダルを閉じる（QR領域もクリア）
     const closeShareModal = () => {
         if (!shareModal) return;
-    shareModal.classList.add('hidden');
+        shareModal.classList.add('hidden');
         if (qrCodeContainer) qrCodeContainer.innerHTML = '';
+        if (qrResizeHandler) {
+            window.removeEventListener('resize', qrResizeHandler);
+            qrResizeHandler = null;
+        }
     };
     
     const initialize = () => {
