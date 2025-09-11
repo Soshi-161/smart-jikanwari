@@ -25,34 +25,34 @@
             
             /* ヘッダ（フッタ）: 左上と上の見出しが入る */
             .table-head {
-                @apply text-xs text-gray-700 uppercase bg-gray-100;
+                @apply text-gray-700 uppercase bg-gray-100;
             }
             
             /* 左上（左下） */
             .table-top-side {
-                @apply py-3 px-4 font-bold whitespace-nowrap bg-gray-100 left-0 z-20;
+                @apply py-3 px-4 font-bold whitespace-nowrap bg-gray-100;
                 box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
             }
             
             /* 上（下）の見出し */
             .table-top {
-                @apply py-3 px-4 font-semibold whitespace-nowrap;
+                @apply py-3 px-4 font-semibold whitespace-nowrap border-l-2 border-gray-300;
             }
             
             /* 行 */
             .table-row {
-                @apply bg-white border-b hover:bg-gray-50;
+                @apply bg-white hover:bg-gray-50;
             }
             
             /* 左の見出し */
             .table-side {
-                @apply py-3 px-4 font-bold text-gray-900 whitespace-nowrap bg-white border-r sticky left-0 z-10;
+                @apply py-3 px-4 font-bold text-gray-900 whitespace-nowrap bg-white border-t-2 border-gray-300;
                 box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
             }
             
             /* セル */
             .table-cell {
-                @apply py-2 px-2 align-top min-w-[200px];
+                @apply py-2 px-2 align-top border-l-2 border-t-2 border-gray-300;
             }
             
             /* セル内のdiv要素 */
@@ -68,18 +68,18 @@
             /* 力シリーズ */
             /* 行 */
             .table-row-power {
-                @apply bg-gray-50 border-t;
+                @apply bg-gray-50;
             }
             
             /* 見出し */
             .table-side-power {
-                @apply py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-r sticky left-0 z-10;
+                @apply py-2 px-4 font-bold text-gray-900 whitespace-nowrap bg-gray-50 border-t-2 border-b-2 border-gray-300;
                 box-shadow: 2px 0 0 rgb(0 0 0 / 0.05);
             }
             
             /* セル */
             .table-cell-power {
-                @apply py-2 px-2 text-sm text-gray-700;
+                @apply py-2 px-2 text-sm text-gray-700 border-l-2 border-t-2 border-b-2 border-gray-300;
             }
             
             
@@ -89,7 +89,7 @@
             }
             
             .cardview-first {
-                @apply p-4 bg-gray-100 border-b;
+                @apply p-4 bg-gray-100 border-b border-gray-300;
             }
             
             .cardview-first-index {
@@ -105,7 +105,7 @@
             }
             
             .cardview-second-index {
-                @apply font-semibold text-base text-gray-700 mb-2 pb-1 border-b;
+                @apply font-semibold text-base text-gray-700 mb-2 pb-1 border-b border-gray-300;
             }
             
             .cardview-second-content {
@@ -156,8 +156,8 @@
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
         }
         
-        /* マイクリア・新中学問題集の色 */
         @media not print {
+            /* マイクリア・新中学問題集の色 */
             :root {
                 --border-color-english: #2570e1;
                 --border-color-math: #e64b4b;
@@ -172,6 +172,13 @@
                 visibility: hidden;
                 pointer-events: none;
             }
+            
+            .table-side, .table-side-power, .table-top-side {
+                position: -webkit-sticky;
+                position: sticky;
+                left: 0;
+                z-index: 10;
+            }
         }
         
         @media print {
@@ -182,10 +189,6 @@
                 --border-color-science: #888;
                 --border-color-social: #444;
                 --border-color-other: #666;
-            }
-            
-            .no-print, div.no-print,  {
-                display: none;
             }
         }
         @page {
@@ -232,13 +235,13 @@
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-        <header class="mb-8 text-center no-print">
+        <header class="mb-8 text-center">
             <h1 class="text-4xl font-bold text-gray-900 tracking-tight">スマート時間割</h1>
             <p class="mt-3 text-lg text-gray-600">テキストデータを貼り付けるだけで、インタラクティブな時間割を作成します。</p>
         </header>
 
         <!-- 操作パネル（折りたたみ可能） -->
-        <div id="main-panel" class="bg-white rounded-xl shadow-md mb-8 no-print">
+        <div id="main-panel" class="bg-white rounded-xl shadow-md mb-8">
             <div class="flex items-center justify-between p-4 border-b">
                 <h2 class="text-lg font-semibold">操作パネル</h2>
                 <button id="panelToggleBtn" class="text-sm text-gray-700 hover:text-gray-900 px-3 py-1.5 rounded-md border border-gray-300 bg-white" aria-expanded="true">折りたたむ</button>
@@ -287,7 +290,7 @@
                                     <label for="showTagsCheckbox" class="text-sm font-medium text-gray-700">タグを表示</label>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <input id="separateVideoEtc" type="checkbox" class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
+                                    <input id="separateVideoEtc" type="checkbox" checked class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500">
                                     <label for="separateVideoEtc" class="text-sm font-medium text-gray-700">映像・学トレなどを分割</label>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -328,7 +331,7 @@
     </div>
 
     <!-- クリア確認ポップオーバー（ボタン付近に表示） -->
-    <div id="clearPopover" class="hidden fixed z-50 no-print" role="dialog" aria-modal="true" aria-labelledby="clearPopoverTitle">
+    <div id="clearPopover" class="hidden fixed z-50" role="dialog" aria-modal="true" aria-labelledby="clearPopoverTitle">
         <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-72">
             <h3 id="clearPopoverTitle" class="text-sm font-semibold text-gray-900 mb-2">確認</h3>
             <p class="text-sm text-gray-700 mb-3">元データをクリアします。よろしいですか？</p>
