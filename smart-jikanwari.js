@@ -911,23 +911,23 @@ document.addEventListener('DOMContentLoaded', () => {
         rowSelector.value = attributeMap.lesson;
         colSelector.value = attributeMap.period;
         
-        rawDataEl.addEventListener('input', () => {
+        if (rawDataEl) rawDataEl.addEventListener('input', () => {
            [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
         });
-        rowSelector.addEventListener('change', () => {
+        if (rowSelector) rowSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        colSelector.addEventListener('change', () => {
+        if (colSelector) colSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        tableViewBtn.addEventListener('click', () => setView('table'));
-        cardViewBtn.addEventListener('click', () => setView('card'));
-        saveImageButton.addEventListener('click', handleSaveAsImage);
-        // 共有モーダルを開く
-        shareButton.addEventListener('click', () => openShareModal());
+        if (tableViewBtn) tableViewBtn.addEventListener('click', () => setView('table'));
+        if (cardViewBtn) cardViewBtn.addEventListener('click', () => setView('card'));
+        if (saveImageButton) saveImageButton.addEventListener('click', handleSaveAsImage);
+    // 共有モーダルを開く
+    if (shareButton) shareButton.addEventListener('click', () => openShareModal());
         // モーダルを閉じる操作（背景クリック・×ボタン・Escキー）
         if (shareModalBackdrop) shareModalBackdrop.addEventListener('click', closeShareModal);
         // ダイアログ外クリックで閉じる
@@ -1110,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });
-        tableContainer.addEventListener('click', (e) => {
+        if (tableContainer) tableContainer.addEventListener('click', (e) => {
             const card = e.target.closest('.table-card');
             if (!card) return;
             if (!(currentView === 'table' && rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
