@@ -518,25 +518,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         rowHeaders.forEach(rowH => {
-            // 右の見出し
             const erow = escapeHTML(rowH);
-            tableHtml += `<tr class="table-row"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
-            
-            // セル
+            // 学トレ/映像授業/力シリーズなど（映像・学トレ系）はセル分割対象外
+            const videoEtcLessonTypesForSplit = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
+            const shouldSplitTwoRows = (rowAttr === 'lesson' && colAttr === 'period' && videoEtcLessonTypesForSplit.indexOf(rowH) < 0);
+            if (!shouldSplitTwoRows) {
+                // 通常1行レイアウト（映像・学トレ系や他の組み合わせ）。
+                // 学トレなど（非分割行）でも、列（時限）をまたいで生徒の位置が
+                // 一貫するように orderBySlots() を適用し、欠ける位置はプレースホルダーで埋める。
+                tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+                let prevSlots = [];
+                colHeaders.forEach(colH => {
+                    const cellData = dataMap.get(rowH)?.get(colH);
+                    let toRender = cellData;
+                    if (rowAttr === 'lesson' && colAttr === 'period') {
+                        const { slots, nextPrev } = orderBySlots(toRender || [], prevSlots);
+                        toRender = (slots && slots.length) ? slots.map(s => s ?? { __placeholder: true }) : toRender;
+                        prevSlots = nextPrev;
+                    }
+                    tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                    if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
+                    tableHtml += `</td>`;
+                });
+                tableHtml += `</tr>`;
+                return;
+            }
+
+            // 2行レイアウト: 上段(レーン0) + 下段(レーン1)、見出しセルはrowspan=2
+            // カラム毎に toRender をレーン分割する
+            // ポイント: orderBySlots() を使い、同一講師内で同一生徒の“スロット位置”を
+            // 時限をまたいでも一貫させる（= 連続コマで上下レーンが入れ替わらない）
+            const perColLanes = new Map();
             let prevSlots = [];
             colHeaders.forEach(colH => {
-                const cellData = dataMap.get(rowH)?.get(colH);
-                let toRender = cellData;
-                if ( toRender && rowAttr === 'lesson' && colAttr === 'period') {
+                const items = dataMap.get(rowH)?.get(colH) || [];
+                let toRender = items;
+                if (toRender && toRender.length) {
                     const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
-                } // 連コマの生徒は横並びになるようにする
-                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
+                }
+                // レーン分割（交互に上段/下段へ）
+                const lane0 = [];
+                const lane1 = [];
+                toRender.forEach((s, idx) => {
+                    (idx % 2 === 0 ? lane0 : lane1).push(s);
+                });
+                perColLanes.set(colH, { lane0, lane1 });
+            });
+
+            // 上段
+            tableHtml += `<tr class="table-row instructor-block-top">` +
+                         `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`;
+            colHeaders.forEach(colH => {
+                const lanes = perColLanes.get(colH) || { lane0: [], lane1: [] };
+                tableHtml += `<td class="table-cell cell-lane0" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (lanes.lane0 && lanes.lane0.length) tableHtml += generateCellContent(lanes.lane0, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
-            
+            tableHtml += `</tr>`;
+
+            // 下段（同一講師内の区切りは点線）
+            tableHtml += `<tr class="table-row instructor-block-bottom">`;
+            colHeaders.forEach(colH => {
+                const lanes = perColLanes.get(colH) || { lane0: [], lane1: [] };
+                tableHtml += `<td class="table-cell cell-lane1" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (lanes.lane1 && lanes.lane1.length) tableHtml += generateCellContent(lanes.lane1, rowAttr, colAttr);
+                tableHtml += `</td>`;
+            });
             tableHtml += `</tr>`;
         });
         
