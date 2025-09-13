@@ -24,6 +24,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
+    // 共有モーダル関連の要素参照
+    const shareModal = document.getElementById('shareModal');
+    const shareModalBackdrop = document.getElementById('shareModalBackdrop');
+    const shareModalDialog = document.getElementById('shareModalDialog');
+    const shareModalClose = document.getElementById('shareModalClose');
+    const shareUrlInput = document.getElementById('shareUrlInput');
+    const copyLinkButton = document.getElementById('copyLinkButton');
+    const qrCodeContainer = document.getElementById('qrCodeContainer');
+    // 共有モーダル: リサイズ処理用ハンドラ参照
+    let qrResizeHandler = null;
+    let qrResizeTimer = null;
     
     const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
     let scheduleData = [];
@@ -771,32 +782,69 @@ document.addEventListener('DOMContentLoaded', () => {
         u.searchParams.set('data64', data64);
         return u.toString();
     };
-    
-    const handleShare = async () => {
-        const url = buildShareUrl();
-        shareButton.disabled = true;
-        const original = shareButton.textContent;
+
+    // 内部関数: 表示領域に応じてQRコードの推奨サイズを計算
+    const computeQrSize = () => {
+        // モーダルの横幅（パディング込み）を取得し、QRの最大幅を算出
+        const dialogW = shareModalDialog ? shareModalDialog.clientWidth : Math.min(window.innerWidth * 0.95, 560);
+        // QR表示ボックスの左右パディング(p-3=12px)と余白を考慮して少し小さめに
+        const widthBound = Math.max(120, Math.floor(dialogW - 48));
+        // 縦方向はビューポート高の55%を上限にして、見切れ防止
+        const heightBound = Math.max(120, Math.floor(window.innerHeight * 0.55));
+        // 絶対上限を設けつつ、最小は160pxに
+        const size = Math.min(420, widthBound, heightBound);
+        return Math.max(160, size);
+    };
+
+    // 内部関数: 指定URLでQRを再描画（サイズは自動計算）
+    const renderQr = (url) => {
+        if (!qrCodeContainer) return;
+        qrCodeContainer.innerHTML = '';
         try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(url);
-            } else {
-                const temp = document.createElement('textarea');
-                temp.value = url;
-                document.body.appendChild(temp);
-                temp.select();
-                document.execCommand('copy');
-                document.body.removeChild(temp);
-            }
-            shareButton.textContent = 'コピーしました';
+            const size = computeQrSize();
+            // eslint-disable-next-line no-undef
+            new QRCode(qrCodeContainer, { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
         } catch (e) {
-            console.warn('クリップボードへのコピーに失敗:', e);
-            shareButton.textContent = 'URLを表示';
-            alert(url);
-        } finally {
-            setTimeout(() => {
-                shareButton.textContent = original;
-                shareButton.disabled = false;
-            }, 1400);
+            const msg = document.createElement('div');
+            msg.className = 'text-xs text-gray-500';
+            msg.textContent = 'QRコードの生成に失敗しました。';
+            qrCodeContainer.appendChild(msg);
+        }
+    };
+
+    // 共有モーダルを開く: 入力欄にURLをセットし、QRコードを生成
+    const openShareModal = (prebuiltUrl) => {
+        if (!shareModal) return;
+        const url = prebuiltUrl || buildShareUrl();
+        if (shareUrlInput) {
+            shareUrlInput.value = url;
+            try { shareUrlInput.focus(); shareUrlInput.select(); } catch (_) { /* ignore */ }
+        }
+        // モーダルサイズを画面にフィット
+        if (shareModalDialog) {
+            shareModalDialog.style.maxWidth = Math.floor(Math.min(window.innerWidth * 0.95, 560)) + 'px';
+            shareModalDialog.style.width = '100%';
+            shareModalDialog.style.maxHeight = Math.floor(window.innerHeight * 0.9) + 'px';
+            shareModalDialog.style.overflowY = 'auto';
+        }
+        // まず表示してからレイアウト計測し、QR描画
+        shareModal.classList.remove('hidden');
+        requestAnimationFrame(() => renderQr(url));
+        // リサイズで再描画（デバウンス付き）
+        qrResizeHandler = () => {
+            if (qrResizeTimer) clearTimeout(qrResizeTimer);
+            qrResizeTimer = setTimeout(() => renderQr(url), 120);
+        };
+        window.addEventListener('resize', qrResizeHandler);
+    };
+    // 共有モーダルを閉じる（QR領域もクリア）
+    const closeShareModal = () => {
+        if (!shareModal) return;
+        shareModal.classList.add('hidden');
+        if (qrCodeContainer) qrCodeContainer.innerHTML = '';
+        if (qrResizeHandler) {
+            window.removeEventListener('resize', qrResizeHandler);
+            qrResizeHandler = null;
         }
     };
     
@@ -863,22 +911,73 @@ document.addEventListener('DOMContentLoaded', () => {
         rowSelector.value = attributeMap.lesson;
         colSelector.value = attributeMap.period;
         
-        rawDataEl.addEventListener('input', () => {
+        if (rawDataEl) rawDataEl.addEventListener('input', () => {
            [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
         });
-        rowSelector.addEventListener('change', () => {
+        if (rowSelector) rowSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        colSelector.addEventListener('change', () => {
+        if (colSelector) colSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        tableViewBtn.addEventListener('click', () => setView('table'));
-        cardViewBtn.addEventListener('click', () => setView('card'));
-        saveImageButton.addEventListener('click', handleSaveAsImage);
-        shareButton.addEventListener('click', handleShare);
+        if (tableViewBtn) tableViewBtn.addEventListener('click', () => setView('table'));
+        if (cardViewBtn) cardViewBtn.addEventListener('click', () => setView('card'));
+        if (saveImageButton) saveImageButton.addEventListener('click', handleSaveAsImage);
+    // 共有モーダルを開く
+    if (shareButton) shareButton.addEventListener('click', () => openShareModal());
+        // モーダルを閉じる操作（背景クリック・×ボタン・Escキー）
+        if (shareModalBackdrop) shareModalBackdrop.addEventListener('click', closeShareModal);
+        // ダイアログ外クリックで閉じる
+        if (shareModal) {
+            shareModal.addEventListener('mousedown', (e) => {
+                if (!shareModalDialog) return;
+                const target = e.target;
+                if (!shareModalDialog.contains(target)) closeShareModal();
+            });
+            // タッチデバイス対応
+            shareModal.addEventListener('touchstart', (e) => {
+                if (!shareModalDialog) return;
+                const touch = e.touches && e.touches[0];
+                const target = touch ? document.elementFromPoint(touch.clientX, touch.clientY) : e.target;
+                if (target && !shareModalDialog.contains(target)) closeShareModal();
+            }, { passive: true });
+        }
+        if (shareModalClose) shareModalClose.addEventListener('click', closeShareModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && shareModal && !shareModal.classList.contains('hidden')) closeShareModal();
+        });
+        // 「リンクをコピー」ボタン: 共有URLをクリップボードへコピー
+        if (copyLinkButton) {
+            copyLinkButton.addEventListener('click', async () => {
+                const url = (shareUrlInput && shareUrlInput.value) || buildShareUrl();
+                copyLinkButton.disabled = true;
+                const original = copyLinkButton.textContent;
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(url);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = url;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    copyLinkButton.textContent = 'コピーしました';
+                } catch (e) {
+                    console.warn('クリップボードへのコピーに失敗:', e);
+                    alert(url);
+                } finally {
+                    setTimeout(() => {
+                        copyLinkButton.textContent = original || 'リンクをコピー';
+                        copyLinkButton.disabled = false;
+                    }, 1200);
+                }
+            });
+        }
         if (separateVideoEtc) {
             separateVideoEtc.addEventListener('change', () => {
                 [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
@@ -1011,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });
-        tableContainer.addEventListener('click', (e) => {
+        if (tableContainer) tableContainer.addEventListener('click', (e) => {
             const card = e.target.closest('.table-card');
             if (!card) return;
             if (!(currentView === 'table' && rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
