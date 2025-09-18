@@ -45,19 +45,6 @@
             .table-row {
                 @apply bg-white hover:bg-gray-50;
             }
-            /* 講師ブロックの上段・下段で装飾を分ける */
-            .instructor-block-top .table-side { /* 別講師の区切り: 実線 */
-                border-top: 3px solid #9ca3af; /* gray-400 */
-            }
-            .instructor-block-bottom .table-cell { /* 同一講師内の上下区切り: 点線 */
-                border-top-style: dotted;
-                border-top-width: 2px;
-                border-top-color: #cbd5e1; /* slate-300 */
-            }
-            /* 上段セルもヘッダーと同じ太さ・色で実線（行全体で統一） */
-            .instructor-block-top .table-cell {
-                border-top: 3px solid #9ca3af; /* gray-400 */
-            }
             
             /* 左の見出し */
             .table-side {
@@ -68,6 +55,11 @@
             /* セル */
             .table-cell {
                 @apply py-2 px-2 align-top border-l-2 border-t-2 border-gray-300;
+            }
+            
+            .instructor-block-bottom .table-cell { /* 同一講師内の上下区切り: 点線 */
+                border-top-style: dotted;
+                /*border-top-width: 2px;*/
             }
             
             /* セル内のdiv要素 */
