@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let qrResizeTimer = null;
     
     const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
+    const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
     let scheduleData = [];
     let additionalScheduleData = [];
     let videoInstructorByTimeslot = new Map();
@@ -138,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let j = 4;
             while (j < parts.length && Object.keys(knownIcons).indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
-            const icons = parts.slice(4, j).map( s => `<span class="border">${knownIcons[s]}</span>` );
+            const icons = parts.slice(4, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
             const memo  = parts.slice(j).filter(Boolean);
             if (memo.length > 0) memoExist = true;
             
@@ -176,11 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentName = line1Parts[1];
             
             const subject = line2Parts[0] || '';
-            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border">${knownIcons[s] || s}</span>` );
+            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border border-gray-400">${knownIcons[s] || s}</span>` );
             
             let j = 0;
             while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
-            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border">${knownIcons[s]}</span>` );
+            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
             const instructor = line3Parts[j] || '個別 その他';
             const memo  = line3Parts.slice(j+1).filter(Boolean);
             if (memo.length > 0) memoExist = true;
@@ -420,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return uniqueStudents.map(item => item.student);
         } else if (attr === 'lesson') {
-            const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
             return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
                 if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
                     return a.localeCompare(b, 'ja');
@@ -510,7 +510,13 @@ document.addEventListener('DOMContentLoaded', () => {
         tableHtml += `</tr></thead><tbody>`;
         
         if (colAttr === 'period') { // 面談等のメモ
-            tableHtml += `<tr class="table-row"><th scope="row" class="table-side h-[7em]"></th>`;
+            tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side h-[14em]" rowspan="2"></th>`;
+            colHeaders.forEach(colH => {
+                const name = videoInstructorByTimeslot.get(colH) || '—';
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+            });
+            
+            tableHtml += `<tr class="table-row instructor-block-bottom">`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
                 tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
@@ -520,22 +526,21 @@ document.addEventListener('DOMContentLoaded', () => {
         rowHeaders.forEach(rowH => {
             const erow = escapeHTML(rowH);
             // 学トレ/映像授業/力シリーズなど（映像・学トレ系）はセル分割対象外
-            const videoEtcLessonTypesForSplit = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
-            const shouldSplitTwoRows = (rowAttr === 'lesson' && colAttr === 'period' && videoEtcLessonTypesForSplit.indexOf(rowH) < 0);
-            if (!shouldSplitTwoRows) {
-                // 通常1行レイアウト（映像・学トレ系や他の組み合わせ）。
-                // 学トレなど（非分割行）でも、列（時限）をまたいで生徒の位置が
-                // 一貫するように orderBySlots() を適用し、欠ける位置はプレースホルダーで埋める。
-                tableHtml += `<tr class="table-row "><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+            const isLessonPeriod = (rowAttr === 'lesson' && colAttr === 'period');
+            const isVideoEtc = videoEtcLessonTypes.indexOf(rowH) >= 0;
+            if (!isLessonPeriod || isVideoEtc) {
+                // 左の見出し
+                tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+                
                 let prevSlots = [];
                 colHeaders.forEach(colH => {
                     const cellData = dataMap.get(rowH)?.get(colH);
                     let toRender = cellData;
-                    if (rowAttr === 'lesson' && colAttr === 'period') {
+                    if (isLessonPeriod) {
                         const { slots, nextPrev } = orderBySlots(toRender || [], prevSlots);
                         toRender = (slots && slots.length) ? slots.map(s => s ?? { __placeholder: true }) : toRender;
                         prevSlots = nextPrev;
-                    }
+                    } // 連コマの生徒は横並びになるようにする
                     tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
                     if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                     tableHtml += `</td>`;
@@ -543,47 +548,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableHtml += `</tr>`;
                 return;
             }
-
+            
             // 2行レイアウト: 上段(レーン0) + 下段(レーン1)、見出しセルはrowspan=2
             // カラム毎に toRender をレーン分割する
-            // ポイント: orderBySlots() を使い、同一講師内で同一生徒の“スロット位置”を
-            // 時限をまたいでも一貫させる（= 連続コマで上下レーンが入れ替わらない）
-            const perColLanes = new Map();
+            let perColLanes = {};
             let prevSlots = [];
             colHeaders.forEach(colH => {
-                const items = dataMap.get(rowH)?.get(colH) || [];
-                let toRender = items;
+                const cellData = dataMap.get(rowH)?.get(colH) || [];
+                let toRender = cellData;
                 if (toRender && toRender.length) {
                     const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
                 }
                 // レーン分割（交互に上段/下段へ）
-                const lane0 = [];
-                const lane1 = [];
-                toRender.forEach((s, idx) => {
-                    (idx % 2 === 0 ? lane0 : lane1).push(s);
-                });
-                perColLanes.set(colH, { lane0, lane1 });
+                const lane0 = toRender.slice(0, 1);
+                const lane1 = toRender.slice(1);
+                perColLanes[colH] = [lane0, lane1];
             });
-
+            
             // 上段
+            //左の見出し
             tableHtml += `<tr class="table-row">` +
                          `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`;
             colHeaders.forEach(colH => {
-                const lanes = perColLanes.get(colH) || { lane0: [], lane1: [] };
-                tableHtml += `<td class="table-cell cell-lane0" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (lanes.lane0 && lanes.lane0.length) tableHtml += generateCellContent(lanes.lane0, rowAttr, colAttr);
+                toRender = perColLanes[colH]?.[0] || [];
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
             tableHtml += `</tr>`;
-
+            
             // 下段（同一講師内の区切りは点線）
             tableHtml += `<tr class="table-row instructor-block-bottom">`;
             colHeaders.forEach(colH => {
-                const lanes = perColLanes.get(colH) || { lane0: [], lane1: [] };
-                tableHtml += `<td class="table-cell cell-lane1" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (lanes.lane1 && lanes.lane1.length) tableHtml += generateCellContent(lanes.lane1, rowAttr, colAttr);
+                toRender = perColLanes[colH]?.[1] || [];
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
             tableHtml += `</tr>`;
