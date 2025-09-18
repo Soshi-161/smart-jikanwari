@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardViewBtn = document.getElementById('cardViewBtn');
     const saveImageButton = document.getElementById('saveImageButton');
     const shareButton = document.getElementById('shareButton');
-    const showTagsCheckbox = document.getElementById('showTagsCheckbox');
     const separateVideoEtc = document.getElementById('separateVideoEtc');
     const panelToggleBtn = document.getElementById('panelToggleBtn');
     const panelBody = document.getElementById('panel-body');
@@ -25,18 +24,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomSelect = document.getElementById('zoomSelect');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
+    // 共有モーダル関連の要素参照
+    const shareModal = document.getElementById('shareModal');
+    const shareModalBackdrop = document.getElementById('shareModalBackdrop');
+    const shareModalDialog = document.getElementById('shareModalDialog');
+    const shareModalClose = document.getElementById('shareModalClose');
+    const shareUrlInput = document.getElementById('shareUrlInput');
+    const copyLinkButton = document.getElementById('copyLinkButton');
+    const qrCodeContainer = document.getElementById('qrCodeContainer');
+    // 共有モーダル: リサイズ処理用ハンドラ参照
+    let qrResizeHandler = null;
+    let qrResizeTimer = null;
     
+    const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
+    const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
     let scheduleData = [];
     let additionalScheduleData = [];
+    let videoInstructorByTimeslot = new Map();
+    let memoExist = false;
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
-    let videoInstructorByTimeslot = new Map();
+    
     let currentZoom = 1;
     // Zoom is now controlled as percent 30-150 via a numeric input; internal scale remains 0.3-1.5
     const ZOOM_MIN = 0.3, ZOOM_MAX = 1.5;
-    // Built-in default attribute choices when no data is present
-    const DEFAULT_ATTRIBUTES = ['生徒情報','時限（時間）','教科','講師','タグ','メモ'];
     
     /**********************************
      文字列を受け取り、必要な文字参照を施して返す。もとの文字列がnullかundefinedの場合はから文字列を返す
@@ -55,13 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
     /**********************************
      生のテキストを受け取り、オブジェクトに変換して返す。オブジェクトの形式は
         {
-            '生徒情報': 生徒氏名（学年）,
-            '時限（時間）': 時限（時間）,
-            '教科': 教科,
-            '講師': 講師名または授業種別,
-            'タグ': アイコンなど,
-            'メモ': メモ欄,
-            '学年': 生徒の学年,
+            student: 生徒氏名,
+            period:  時限（時間）,
+            subject: 教科,
+            lesson:  講師名または授業種別,
+            icon:    アイコン,
+            memo:    メモ欄,
+            grade:   生徒の学年,
         }
     ***********************************/
     const parseRawData = (text) => {
@@ -76,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let currentTime = '不明'; // 時限の時刻範囲
         let mode = 'unknown'; // video: 映像・学トレなど, individual: 個別授業, additional: 追記
         videoInstructorByTimeslot = new Map(); // 初期化
+        memoExist = false;
         
         const isTimeslotLetter = (s) => /^[A-Z]$/.test(s); // 文字列が大文字のA-Z一文字であればtrueを返す（時限） cf. RegExp.prototype.test()
         const isTimeRange = (s) => /\d{1,2}:\d{2}\s*〜\s*\d{1,2}:\d{2}/.test(s); // e.g. 13:30 〜 14:30
@@ -85,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAdditional = (s) => (s == '追記');
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
         
-        const knownIcons = ['出席', '欠席', '追加受講', '振替', 'SNET振替', '講習会', 'マンツーマン', '有効時限', '重要'];
+        const knownIcons = {'出席': '出', '欠席': '欠', '追加受講': '追', '振替': '振', 'SNET振替': '振', '講習会': '講', 'マンツーマン': '１', '有効時限': '有', '重要': '重'};
         
         const parseVideoStudent = (line) => {
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`; // 時限
@@ -94,13 +107,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (parts.length < 4) { // partsの要素は4以上とする e.g. 中１    個別二俣川太郎    英語 学    振替
                 return { // 想定外の入力でも何かしら返す
-                    '生徒情報': `${line}`,
-                    '時限（時間）': timeslotInfo,
-                    '教科': '',
-                    '講師': 'その他',
-                    'タグ': '',
-                    'メモ': '',
-                    '学年': '',
+                    student: line,
+                    period:  timeslotInfo,
+                    subject: '',
+                    lesson:  'その他',
+                    icon:    '',
+                    memo:    '',
+                    grade:   '',
                 };
             }
             
@@ -125,18 +138,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             let j = 4;
-            while (j < parts.length && knownIcons.indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
-            const icons = parts.slice(4, j).filter(Boolean);
+            while (j < parts.length && Object.keys(knownIcons).indexOf(parts[j]) >= 0) j++; // partsのjより前はアイコン
+            const icons = parts.slice(4, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
             const memo  = parts.slice(j).filter(Boolean);
+            if (memo.length > 0) memoExist = true;
             
             return {
-                '生徒情報': `${studentName}（${grade}）`,
-                '時限（時間）': timeslotInfo,
-                '教科': subject,
-                '講師': lessonType,
-                'タグ': icons.join(' '),
-                'メモ': memo.join(' '),
-                '学年': grade,
+                student: studentName,
+                period:  timeslotInfo,
+                subject: subject,
+                lesson:  lessonType,
+                icon:    icons.join(' '),
+                memo:    memo.join(' '),
+                grade:   grade,
             };
         };
         
@@ -149,13 +163,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (line1Parts.length != 2) { // line1には学年と生徒氏名が必要
                 return { // 想定外の入力でも何かしら返す
-                    '生徒情報': `${line1} ${line2} ${line3}`,
-                    '時限（時間）': timeslotInfo,
-                    '教科': '',
-                    '講師': '個別 その他',
-                    'タグ': '',
-                    'メモ': '',
-                    '学年': '',
+                    student: `${line1} ${line2} ${line3}`,
+                    period:  timeslotInfo,
+                    subject: '',
+                    lesson:  '個別 その他',
+                    icon:    '',
+                    memo:    '',
+                    grade:   '',
                 };
             }
             
@@ -163,22 +177,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const studentName = line1Parts[1];
             
             const subject = line2Parts[0] || '';
-            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個'); // 「個」は無視する
+            const iconsFromLine2 = line2Parts.slice(1).filter(p => p != '個').map( s => `<span class="border border-gray-400">${knownIcons[s] || s}</span>` );
             
             let j = 0;
-            while (j < line3Parts.length && knownIcons.indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
-            const iconsFromLine3 = line3Parts.slice(0, j).filter(Boolean);
+            while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
+            const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
             const instructor = line3Parts[j] || '個別 その他';
             const memo  = line3Parts.slice(j+1).filter(Boolean);
+            if (memo.length > 0) memoExist = true;
             
             return {
-                '生徒情報': `${studentName}（${grade}）`,
-                '時限（時間）': timeslotInfo,
-                '教科': subject,
-                '講師': instructor,
-                'タグ': [...iconsFromLine2, ...iconsFromLine3].join(' '),
-                'メモ': memo.join(' '),
-                '学年': grade,
+                student: studentName,
+                period:  timeslotInfo,
+                subject: subject,
+                lesson:  instructor,
+                icon:    [...iconsFromLine2, ...iconsFromLine3].join(' '),
+                memo:    memo.join(' '),
+                grade:   grade,
             };
         };
         
@@ -248,13 +263,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (instructor != '') {
                     additionalSchedule.push({
-                        '生徒情報': content,
-                        '時限（時間）': timeslotMap[currentTimeslot],
-                        '教科': content,
-                        '講師': instructor,
-                        'タグ': '',
-                        'メモ': '',
-                        '学年': '',
+                        student: content,
+                        period:  timeslotMap[currentTimeslot],
+                        subject: content,
+                        lesson:  instructor,
+                        icon:    '',
+                        memo:    '',
+                        grade:   '',
                     });
                 }
                 
@@ -330,29 +345,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 extraClass = 'placeholder';
                 color = 'transparent';
                 parts = [
-                    { key: '生徒情報', value: '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: '&nbsp;', defaultClass: 'text-subject' },
-                    { key: '講師', value: '&nbsp;', defaultClass: 'text-class' },
-                    { key: '時限（時間）', value: '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'タグ', value: '&nbsp;', defaultClass: 'text-icon' },
-                    { key: 'メモ', value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
+                    { key: 'student', value: '&nbsp;', defaultClass: '' },
+                    { key: 'subject', value: '&nbsp;', defaultClass: 'text-subject' },
+                    { key: 'lesson',  value: '&nbsp;', defaultClass: 'text-lesson' },
+                    { key: 'period',  value: '&nbsp;', defaultClass: 'text-period' },
+                    { key: 'memo',    value: '&nbsp;', defaultClass: 'text-memo text-memo-table' },
                 ];
             } else {
-                dataAttrs = `data-student="${escapeHTML(item['生徒情報'])}" data-timeslot="${escapeHTML(item['時限（時間）'])}"`;
-                color = stringToColor(item['教科']);
+                dataAttrs = `data-student="${escapeHTML(item.student)}" data-timeslot="${escapeHTML(item.period)}"`;
+                color = stringToColor(item.subject);
                 parts = [
-                    { key: '生徒情報', value: escapeHTML(item['生徒情報']) || '&nbsp;', defaultClass: '' },
-                    { key: '教科', value: escapeHTML(item['教科']) || '&nbsp;', defaultClass: 'text-subject' },
-                    { key: '講師', value: `授業: ${escapeHTML(item['講師'])}`, defaultClass: 'text-class' },
-                    { key: '時限（時間）', value: escapeHTML(item['時限（時間）']) || '&nbsp;', defaultClass: 'text-period' },
-                    { key: 'タグ', value: escapeHTML(item['タグ']) || '&nbsp;', defaultClass: 'text-icon' },
-                    { key: 'メモ', value: escapeHTML(item['メモ']) || '&nbsp;', defaultClass: 'text-memo text-memo-table' },
+                    { key: 'student', value: `${escapeHTML(item.student)}（${escapeHTML(item.grade)}）`, defaultClass: '' },
+                    { key: 'subject', value: escapeHTML(item.subject) || '&nbsp;', defaultClass: 'text-subject' },
+                    { key: 'lesson',  value: `授業: ${escapeHTML(item.lesson)}`,    defaultClass: 'text-lesson' },
+                    { key: 'period',  value: escapeHTML(item.period) || '&nbsp;',  defaultClass: 'text-period' },
+                    { key: 'memo',    value: escapeHTML(item.memo) || '&nbsp;',    defaultClass: 'text-memo text-memo-table' },
                 ];
             }
             
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (!showTagsCheckbox.checked) { // タグを表示/非表示で高さを変える //ToDo: メモの表示
-                visibleParts = visibleParts.filter(p => p.key !== 'タグ');
+            if (item.icon) visibleParts[1].value += ` <span class="text-icon">${item.icon}</span>`;
+            if (!memoExist) { // メモが一つでもある場合はメモを表示
+                visibleParts = visibleParts.filter(p => p.key !== 'memo');
             }
             let infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -364,7 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return contentHtml + '</div>';
     };
     
-    
     /**********************************
      カードビューのセルを生成する
     ***********************************/
@@ -373,18 +386,18 @@ document.addEventListener('DOMContentLoaded', () => {
         items.forEach(item => {
             if (!item) return;
             
-            const color = stringToColor(item['教科']);
+            const color = stringToColor(item.subject);
             const parts = [
-                { key: '生徒情報', value: escapeHTML(item['生徒情報']), defaultClass: '' },
-                { key: '教科', value: escapeHTML(item['教科']), defaultClass: 'text-subject' },
-                { key: '講師', value: `講師: ${escapeHTML(item['講師'])}` , defaultClass: 'text-class' },
-                { key: '時限（時間）', value: escapeHTML(item['時限（時間）']), defaultClass: 'text-period' },
-                { key: 'タグ', value: escapeHTML(item['タグ']), defaultClass: 'text-icon' },
-                { key: 'メモ', value: escapeHTML(item['メモ']), defaultClass: 'text-memo' }
+                { key: 'student', value: `${escapeHTML(item.student)}（${escapeHTML(item.grade)}）`, defaultClass: '' },
+                { key: 'subject', value: escapeHTML(item.subject) || '&nbsp;', defaultClass: 'text-subject' },
+                { key: 'lesson',  value: `授業: ${escapeHTML(item.lesson)}`,    defaultClass: 'text-lesson' },
+                { key: 'period',  value: escapeHTML(item.period) || '&nbsp;',  defaultClass: 'text-period' },
+                { key: 'memo',    value: escapeHTML(item.memo) || '&nbsp;',    defaultClass: 'text-memo' },
             ];
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
-            if (!showTagsCheckbox.checked) {
-                visibleParts = visibleParts.filter(p => p.key !== 'タグ');
+            if (item.icon) visibleParts[1].value += ` <span class="text-icon">${item.icon}</span>`;
+            if (!memoExist) { // メモが一つでもある場合はメモを表示
+                visibleParts = visibleParts.filter(p => p.key !== 'memo');
             }
             const infoHtml = visibleParts.map((p, i) => {
                 const cls = i === 0 ? 'text-first' : p.defaultClass;
@@ -399,16 +412,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と見出しの属性を受け取る。scheduleData[]から属性を取り出し、並び替える
     ***********************************/
     const getHeaders = (data, attr) => {
-        if (attr === '生徒情報') {
-            const uniqueStudents = Array.from(new Map(data.map(item => [item['生徒情報'], item])).values()); // 生徒情報のかぶりを消す
+        if (attr === 'student') {
+            const uniqueStudents = Array.from(new Map(data.map(item => [item.student, item])).values()); // 生徒情報のかぶりを消す
             uniqueStudents.sort((a, b) => { // まず学年で並べ替え、次に名前で並べ替える
-                const gradeComparison = gradeToValue(b['学年']) - gradeToValue(a['学年']);
+                const gradeComparison = gradeToValue(b.grade) - gradeToValue(a.grade);
                 if (gradeComparison !== 0) return gradeComparison;
-                return a['生徒情報'].localeCompare(b['生徒情報'], 'ja');
+                return a.student.localeCompare(b.student, 'ja');
             });
-            return uniqueStudents.map(item => item['生徒情報']);
-        } else if (attr === '講師') {
-            const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
+            return uniqueStudents.map(item => item.student);
+        } else if (attr === 'lesson') {
             return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
                 if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
                     return a.localeCompare(b, 'ja');
@@ -425,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
      連コマの生徒を横並びにする関数
     ***********************************/
     const orderBySlots = (cellData, prevSlots) => {
-        const byStudent = new Map(cellData.map(it => [it['生徒情報'], it]));
+        const byStudent = new Map(cellData.map(it => [it.student, it]));
         let used = new Set();
         let slots = new Array(prevSlots.length).fill(null);
         
@@ -455,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             used.add(s);
         }
         
-        const nextPrev = slots.map(it => it ? it['生徒情報'] : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
+        const nextPrev = slots.map(it => it ? it.student : null) ; // slots[]の生徒をnextPrev[]に移す cf. 条件三項演算子
         return { slots, nextPrev };
     };
     
@@ -463,14 +475,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と、入力している属性から、テーブルを生成する
     ***********************************/
     const renderTableView = () => {
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
+        const rowAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === rowSelector.value); // rowSelector.value == '授業・講師' なら rowAttr === 'lesson'
+        const colAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === colSelector.value); // colSelector.value == '時限' なら colAttr === 'period'
         if (!rowAttr || !colAttr || rowAttr === colAttr) {
             tableContainer.innerHTML = `<div class="p-8 text-center text-gray-500">行と列に異なる属性を選択してください。</div>`; return;
         }
         
         let schedule = scheduleData;
         
-        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+        if (rowAttr === 'lesson' || colAttr === 'lesson') { // 行と列のどちらかが講師なら追記を表示する
             schedule = schedule.concat(additionalScheduleData);
         }
         
@@ -489,37 +502,95 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         let tableHtml = '<div class="table-div"><table class="table-table">';
-        tableHtml += `<thead class="table-head sticky"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ＼ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `<thead class="table-head sticky"><tr><th scope="col" class="table-top-side">${escapeHTML(attributeMap[rowAttr])} ＼ ${escapeHTML(attributeMap[colAttr])}</th>`;
         colHeaders.forEach(h => { // 上の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope="col" class="table-top" data-timeslot-col="${eh}">${eh}</th>`;
         });
         tableHtml += `</tr></thead><tbody>`;
         
-        rowHeaders.forEach(rowH => {
-            // 右の見出し
-            const erow = escapeHTML(rowH);
-            tableHtml += `<tr class="table-row"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+        if (colAttr === 'period') { // 面談等のメモ
+            tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side h-[14em]" rowspan="2"></th>`;
+            colHeaders.forEach(colH => {
+                const name = videoInstructorByTimeslot.get(colH) || '—';
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+            });
             
-            // セル
+            tableHtml += `<tr class="table-row instructor-block-bottom">`;
+            colHeaders.forEach(colH => {
+                const name = videoInstructorByTimeslot.get(colH) || '—';
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+            });
+        }
+        
+        rowHeaders.forEach(rowH => {
+            const erow = escapeHTML(rowH);
+            // 学トレ/映像授業/力シリーズなど（映像・学トレ系）はセル分割対象外
+            const isLessonPeriod = (rowAttr === 'lesson' && colAttr === 'period');
+            const isVideoEtc = videoEtcLessonTypes.indexOf(rowH) >= 0;
+            if (!isLessonPeriod || isVideoEtc) {
+                // 左の見出し
+                tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+                
+                let prevSlots = [];
+                colHeaders.forEach(colH => {
+                    const cellData = dataMap.get(rowH)?.get(colH);
+                    let toRender = cellData;
+                    if (isLessonPeriod) {
+                        const { slots, nextPrev } = orderBySlots(toRender || [], prevSlots);
+                        toRender = (slots && slots.length) ? slots.map(s => s ?? { __placeholder: true }) : toRender;
+                        prevSlots = nextPrev;
+                    } // 連コマの生徒は横並びになるようにする
+                    tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                    if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
+                    tableHtml += `</td>`;
+                });
+                tableHtml += `</tr>`;
+                return;
+            }
+            
+            // 2行レイアウト: 上段(レーン0) + 下段(レーン1)、見出しセルはrowspan=2
+            // カラム毎に toRender をレーン分割する
+            let perColLanes = {};
             let prevSlots = [];
             colHeaders.forEach(colH => {
-                const cellData = dataMap.get(rowH)?.get(colH);
+                const cellData = dataMap.get(rowH)?.get(colH) || [];
                 let toRender = cellData;
-                if ( toRender && rowAttr === '講師' && colAttr === '時限（時間）') {
+                if (toRender && toRender.length) {
                     const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
                     toRender = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
-                } // 連コマの生徒は横並びになるようにする
+                }
+                // レーン分割（交互に上段/下段へ）
+                const lane0 = toRender.slice(0, 1);
+                const lane1 = toRender.slice(1);
+                perColLanes[colH] = [lane0, lane1];
+            });
+            
+            // 上段
+            //左の見出し
+            tableHtml += `<tr class="table-row">` +
+                         `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`;
+            colHeaders.forEach(colH => {
+                toRender = perColLanes[colH]?.[0] || [];
                 tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
                 if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
                 tableHtml += `</td>`;
             });
+            tableHtml += `</tr>`;
             
+            // 下段（同一講師内の区切りは点線）
+            tableHtml += `<tr class="table-row instructor-block-bottom">`;
+            colHeaders.forEach(colH => {
+                toRender = perColLanes[colH]?.[1] || [];
+                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
+                tableHtml += `</td>`;
+            });
             tableHtml += `</tr>`;
         });
         
-        if (colAttr === '時限（時間）') { // 力シリーズ担当講師
+        if (colAttr === 'period') { // 力シリーズ担当講師
             tableHtml += `<tr class="table-row-power"><th scope="row" class="table-side-power" data-row-key="力シリーズ担当講師">力シリーズ担当講師</th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
@@ -527,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        tableHtml += `</tbody><tfoot class="table-head"><tr><th scope="col" class="table-top-side">${escapeHTML(rowAttr)} ／ ${escapeHTML(colAttr)}</th>`;
+        tableHtml += `</tbody><tfoot class="table-head"><tr><th scope="col" class="table-top-side">${escapeHTML(attributeMap[rowAttr])} ／ ${escapeHTML(attributeMap[colAttr])}</th>`;
         colHeaders.forEach(h => { // 下の見出し
             const eh = escapeHTML(h);
             tableHtml += `<th scope="col" class="table-top" data-timeslot-col=\"${eh}\">${eh}</th>`;
@@ -562,8 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const applyHighlight = () => {
         clearHighlight();
         if (currentView !== 'table') return;
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
-        if (!(rowAttr === '講師' && colAttr === '時限（時間）')) return;
+        if (!(rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
         if (!selectedStudent || !selectedTimeslot) return;
         const safeStudentSel = CSS.escape ? `.table-card[data-student="${selectedStudent}"]` : `.table-card`;
         const cards = CSS.escape ? Array.from(tableContainer.querySelectorAll(safeStudentSel))
@@ -600,14 +670,15 @@ document.addEventListener('DOMContentLoaded', () => {
      scheduleData[]と、入力している属性から、カードビューを生成する
     ***********************************/
     const renderCardView = () => {
-        const rowAttr = rowSelector.value, colAttr = colSelector.value;
+        const rowAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === rowSelector.value); // rowSelector.value == '授業・講師' なら rowAttr === 'lesson'
+        const colAttr = Object.keys(attributeMap).find((key) => attributeMap[key] === colSelector.value); // colSelector.value == '時限' なら colAttr === 'period'
          if (!rowAttr || !colAttr || rowAttr === colAttr) {
             cardContainer.innerHTML = `<div class="p-8 text-center text-gray-500 bg-white rounded-lg shadow">行と列に異なる属性を選択してください。</div>`; return;
         }
         
         let schedule = scheduleData;
         
-        if (rowAttr === '講師' || colAttr === '講師') { // 行と列のどちらかが講師なら追記を表示する
+        if (rowAttr === 'lesson' || colAttr === 'lesson') { // 行と列のどちらかが講師なら追記を表示する
             schedule = schedule.concat(additionalScheduleData);
         }
         
@@ -761,32 +832,69 @@ document.addEventListener('DOMContentLoaded', () => {
         u.searchParams.set('data64', data64);
         return u.toString();
     };
-    
-    const handleShare = async () => {
-        const url = buildShareUrl();
-        shareButton.disabled = true;
-        const original = shareButton.textContent;
+
+    // 内部関数: 表示領域に応じてQRコードの推奨サイズを計算
+    const computeQrSize = () => {
+        // モーダルの横幅（パディング込み）を取得し、QRの最大幅を算出
+        const dialogW = shareModalDialog ? shareModalDialog.clientWidth : Math.min(window.innerWidth * 0.95, 560);
+        // QR表示ボックスの左右パディング(p-3=12px)と余白を考慮して少し小さめに
+        const widthBound = Math.max(120, Math.floor(dialogW - 48));
+        // 縦方向はビューポート高の55%を上限にして、見切れ防止
+        const heightBound = Math.max(120, Math.floor(window.innerHeight * 0.55));
+        // 絶対上限を設けつつ、最小は160pxに
+        const size = Math.min(420, widthBound, heightBound);
+        return Math.max(160, size);
+    };
+
+    // 内部関数: 指定URLでQRを再描画（サイズは自動計算）
+    const renderQr = (url) => {
+        if (!qrCodeContainer) return;
+        qrCodeContainer.innerHTML = '';
         try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(url);
-            } else {
-                const temp = document.createElement('textarea');
-                temp.value = url;
-                document.body.appendChild(temp);
-                temp.select();
-                document.execCommand('copy');
-                document.body.removeChild(temp);
-            }
-            shareButton.textContent = 'コピーしました';
+            const size = computeQrSize();
+            // eslint-disable-next-line no-undef
+            new QRCode(qrCodeContainer, { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
         } catch (e) {
-            console.warn('クリップボードへのコピーに失敗:', e);
-            shareButton.textContent = 'URLを表示';
-            alert(url);
-        } finally {
-            setTimeout(() => {
-                shareButton.textContent = original;
-                shareButton.disabled = false;
-            }, 1400);
+            const msg = document.createElement('div');
+            msg.className = 'text-xs text-gray-500';
+            msg.textContent = 'QRコードの生成に失敗しました。';
+            qrCodeContainer.appendChild(msg);
+        }
+    };
+
+    // 共有モーダルを開く: 入力欄にURLをセットし、QRコードを生成
+    const openShareModal = (prebuiltUrl) => {
+        if (!shareModal) return;
+        const url = prebuiltUrl || buildShareUrl();
+        if (shareUrlInput) {
+            shareUrlInput.value = url;
+            try { shareUrlInput.focus(); shareUrlInput.select(); } catch (_) { /* ignore */ }
+        }
+        // モーダルサイズを画面にフィット
+        if (shareModalDialog) {
+            shareModalDialog.style.maxWidth = Math.floor(Math.min(window.innerWidth * 0.95, 560)) + 'px';
+            shareModalDialog.style.width = '100%';
+            shareModalDialog.style.maxHeight = Math.floor(window.innerHeight * 0.9) + 'px';
+            shareModalDialog.style.overflowY = 'auto';
+        }
+        // まず表示してからレイアウト計測し、QR描画
+        shareModal.classList.remove('hidden');
+        requestAnimationFrame(() => renderQr(url));
+        // リサイズで再描画（デバウンス付き）
+        qrResizeHandler = () => {
+            if (qrResizeTimer) clearTimeout(qrResizeTimer);
+            qrResizeTimer = setTimeout(() => renderQr(url), 120);
+        };
+        window.addEventListener('resize', qrResizeHandler);
+    };
+    // 共有モーダルを閉じる（QR領域もクリア）
+    const closeShareModal = () => {
+        if (!shareModal) return;
+        shareModal.classList.add('hidden');
+        if (qrCodeContainer) qrCodeContainer.innerHTML = '';
+        if (qrResizeHandler) {
+            window.removeEventListener('resize', qrResizeHandler);
+            qrResizeHandler = null;
         }
     };
     
@@ -843,39 +951,83 @@ document.addEventListener('DOMContentLoaded', () => {
         loadFromQuery();
         [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
         // Build selector options from data or defaults
-        const attributes = scheduleData.length > 0
-            ? Object.keys(scheduleData[0]).filter(key => key !== '学年')
-            : DEFAULT_ATTRIBUTES.slice();
+        const attributes = Object.values(attributeMap);
         rowSelector.innerHTML = ''; colSelector.innerHTML = '';
         attributes.forEach(attr => {
-            rowSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
-            colSelector.innerHTML += `<option value=\"${attr}\">${attr}</option>`;
+            rowSelector.innerHTML += `<option value="${attr}">${attr}</option>`;
+            colSelector.innerHTML += `<option value="${attr}">${attr}</option>`;
         });
         // Set sensible defaults
-        if (attributes.includes('講師') && attributes.includes('時限（時間）')) {
-            rowSelector.value = '講師';
-            colSelector.value = '時限（時間）';
-        } else if (attributes.length >= 2) {
-            rowSelector.value = attributes[0];
-            colSelector.value = attributes[1];
-        }
-        rawDataEl.addEventListener('input', () => {
+        rowSelector.value = attributeMap.lesson;
+        colSelector.value = attributeMap.period;
+        
+        if (rawDataEl) rawDataEl.addEventListener('input', () => {
            [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
            setView(currentView);
         });
-        rowSelector.addEventListener('change', () => {
+        if (rowSelector) rowSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        colSelector.addEventListener('change', () => {
+        if (colSelector) colSelector.addEventListener('change', () => {
             selectedStudent = null; selectedTimeslot = null;
             setView(currentView);
         });
-        tableViewBtn.addEventListener('click', () => setView('table'));
-        cardViewBtn.addEventListener('click', () => setView('card'));
-        saveImageButton.addEventListener('click', handleSaveAsImage);
-        shareButton.addEventListener('click', handleShare);
-        showTagsCheckbox.addEventListener('change', () => setView(currentView));
+        if (tableViewBtn) tableViewBtn.addEventListener('click', () => setView('table'));
+        if (cardViewBtn) cardViewBtn.addEventListener('click', () => setView('card'));
+        if (saveImageButton) saveImageButton.addEventListener('click', handleSaveAsImage);
+    // 共有モーダルを開く
+    if (shareButton) shareButton.addEventListener('click', () => openShareModal());
+        // モーダルを閉じる操作（背景クリック・×ボタン・Escキー）
+        if (shareModalBackdrop) shareModalBackdrop.addEventListener('click', closeShareModal);
+        // ダイアログ外クリックで閉じる
+        if (shareModal) {
+            shareModal.addEventListener('mousedown', (e) => {
+                if (!shareModalDialog) return;
+                const target = e.target;
+                if (!shareModalDialog.contains(target)) closeShareModal();
+            });
+            // タッチデバイス対応
+            shareModal.addEventListener('touchstart', (e) => {
+                if (!shareModalDialog) return;
+                const touch = e.touches && e.touches[0];
+                const target = touch ? document.elementFromPoint(touch.clientX, touch.clientY) : e.target;
+                if (target && !shareModalDialog.contains(target)) closeShareModal();
+            }, { passive: true });
+        }
+        if (shareModalClose) shareModalClose.addEventListener('click', closeShareModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && shareModal && !shareModal.classList.contains('hidden')) closeShareModal();
+        });
+        // 「リンクをコピー」ボタン: 共有URLをクリップボードへコピー
+        if (copyLinkButton) {
+            copyLinkButton.addEventListener('click', async () => {
+                const url = (shareUrlInput && shareUrlInput.value) || buildShareUrl();
+                copyLinkButton.disabled = true;
+                const original = copyLinkButton.textContent;
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(url);
+                    } else {
+                        const temp = document.createElement('textarea');
+                        temp.value = url;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                    }
+                    copyLinkButton.textContent = 'コピーしました';
+                } catch (e) {
+                    console.warn('クリップボードへのコピーに失敗:', e);
+                    alert(url);
+                } finally {
+                    setTimeout(() => {
+                        copyLinkButton.textContent = original || 'リンクをコピー';
+                        copyLinkButton.disabled = false;
+                    }, 1200);
+                }
+            });
+        }
         if (separateVideoEtc) {
             separateVideoEtc.addEventListener('change', () => {
                 [scheduleData, additionalScheduleData] = parseRawData(rawDataEl.value);
@@ -1008,10 +1160,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => { zoomStep(1); renderTableView(); });
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => { zoomStep(-1); renderTableView(); });
-        tableContainer.addEventListener('click', (e) => {
+        if (tableContainer) tableContainer.addEventListener('click', (e) => {
             const card = e.target.closest('.table-card');
             if (!card) return;
-            if (!(currentView === 'table' && rowSelector.value === '講師' && colSelector.value === '時限（時間）')) return;
+            if (!(currentView === 'table' && rowSelector.value === attributeMap.lesson && colSelector.value === attributeMap.period)) return;
             const student = card.getAttribute('data-student');
             const timeslot = card.getAttribute('data-timeslot');
             if (selectedStudent === student && selectedTimeslot === timeslot) {
