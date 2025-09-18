@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 通常1行レイアウト（映像・学トレ系や他の組み合わせ）。
                 // 学トレなど（非分割行）でも、列（時限）をまたいで生徒の位置が
                 // 一貫するように orderBySlots() を適用し、欠ける位置はプレースホルダーで埋める。
-                tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
+                tableHtml += `<tr class="table-row "><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
                 let prevSlots = [];
                 colHeaders.forEach(colH => {
                     const cellData = dataMap.get(rowH)?.get(colH);
@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // 上段
-            tableHtml += `<tr class="table-row instructor-block-top">` +
+            tableHtml += `<tr class="table-row">` +
                          `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`;
             colHeaders.forEach(colH => {
                 const lanes = perColLanes.get(colH) || { lane0: [], lane1: [] };
