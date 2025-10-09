@@ -510,16 +510,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tableHtml += `</tr></thead><tbody>`;
         
         if (colAttr === 'period') { // 面談等のメモ
-            tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side h-[14em]" rowspan="2"></th>`;
+            tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" rowspan="2"></th>`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
-                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+                tableHtml += `<td class="table-cell h-[7em]" data-timeslot-col="${escapeHTML(colH)}"></td>`;
             });
             
             tableHtml += `<tr class="table-row instructor-block-bottom">`;
             colHeaders.forEach(colH => {
                 const name = videoInstructorByTimeslot.get(colH) || '—';
-                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}"></td>`;
+                tableHtml += `<td class="table-cell h-[7em]" data-timeslot-col="${escapeHTML(colH)}"></td>`;
             });
         }
         
