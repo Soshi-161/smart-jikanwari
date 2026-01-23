@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isSectionVideo = (s) => s.startsWith('映像・学トレなど');
         const isSectionIndividual = (s) => s.startsWith('個別授業');
         const isAdditional = (s) => (s == '追記');
-        const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒)/.test(s);
+        const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒|年少|年中|年長)/.test(s);
         
         const knownIcons = {'出席': '出', '欠席': '欠', '追加受講': '追', '振替': '振', 'SNET振替': '振', '講習会': '講', 'マンツーマン': '１', '有効時限': '有', '重要': '重'};
         
@@ -317,6 +317,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const gradeToValue = (grade) => {
         if (typeof grade !== 'string' || grade.length < 2) return 0;
         if (grade == '高卒') return 13;
+        if (grade == '年少') return -2;
+        if (grade == '年中') return -1;
+        if (grade == '年長') return 0;
         const normalizedGrade = grade.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); // 全角数字を半角に
         const type = normalizedGrade.charAt(0); // 小中高
         const level = parseInt(normalizedGrade.slice(1), 10); // 学年の数字
