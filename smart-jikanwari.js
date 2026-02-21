@@ -37,7 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let qrResizeTimer = null;
     
     const attributeMap = {student: '生徒', period: '時限（時間）', subject: '教科', lesson: '授業・講師'};
-    const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', '力シリーズ', 'その他', '映像・学トレなど'];
+    const videoEtcLessonTypes = ['自習', '学トレ', '映像授業', 'その他', '力シリーズ', '映像・学トレなど'];
+    const indv_other = " ";
     let scheduleData = [];
     let additionalScheduleData = [];
     let videoInstructorByTimeslot = new Map();
@@ -166,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     student: `${line1} ${line2} ${line3}`,
                     period:  timeslotInfo,
                     subject: '',
-                    lesson:  '個別 その他',
+                    lesson:  indv_other,
                     icon:    '',
                     memo:    '',
                     grade:   '',
@@ -182,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let j = 0;
             while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
             const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
-            const instructor = line3Parts[j] || '個別 その他';
+            const instructor = line3Parts[j] || indv_other;
             const memo  = line3Parts.slice(j+1).filter(Boolean);
             if (memo.length > 0) memoExist = true;
             
@@ -424,10 +425,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return uniqueStudents.map(item => item.student);
         } else if (attr === 'lesson') {
-            return [...new Set(data.map(item => item[attr]))].sort((a, b) => { // 映像・学トレなどは後ろに並べる
-                if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
+            return [...new Set(data.map(item => item[attr]))].sort((a, b) => {
+                if (a == indv_other) { // 個別指導で講師が指定されていない場合一番上にする
+                    return -1;
+                } else if (b == indv_other) {
+                    return 1;
+                } else if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
                     return a.localeCompare(b, 'ja');
-                } else {
+                } else { // 映像・学トレなどは後ろに並べる
                     return videoEtcLessonTypes.indexOf(a) - videoEtcLessonTypes.indexOf(b);
                 }
                 
@@ -525,72 +530,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableHtml += `<td class="table-cell h-[7em]" data-timeslot-col="${escapeHTML(colH)}"></td>`;
             });
         }
+
+        const RenderRow = (RowData) => {
+            let retVal = '';
+            colHeaders.forEach(colH => {
+                retVal += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
+                if (RowData[colH];) retVal += generateCellContent(RowData[colH];, rowAttr, colAttr);
+                retVal += `</td>`;
+            });
+            return retVal;
+        };
         
         rowHeaders.forEach(rowH => {
             const erow = escapeHTML(rowH);
             // 学トレ/映像授業/力シリーズなど（映像・学トレ系）はセル分割対象外
             const isLessonPeriod = (rowAttr === 'lesson' && colAttr === 'period');
             const isVideoEtc = videoEtcLessonTypes.indexOf(rowH) >= 0;
-            if (!isLessonPeriod || isVideoEtc) {
-                // 左の見出し
-                tableHtml += `<tr class="table-row instructor-block-top"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`;
-                
-                let prevSlots = [];
-                colHeaders.forEach(colH => {
-                    const cellData = dataMap.get(rowH)?.get(colH);
-                    let toRender = cellData;
-                    if (isLessonPeriod) {
-                        const { slots, nextPrev } = orderBySlots(toRender || [], prevSlots);
-                        toRender = (slots && slots.length) ? slots.map(s => s ?? { __placeholder: true }) : toRender;
-                        prevSlots = nextPrev;
-                    } // 連コマの生徒は横並びになるようにする
-                    tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                    if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
-                    tableHtml += `</td>`;
-                });
-                tableHtml += `</tr>`;
-                return;
-            }
-            
-            // 2行レイアウト: 上段(レーン0) + 下段(レーン1)、見出しセルはrowspan=2
-            // カラム毎に toRender をレーン分割する
-            let perColLanes = {};
+
+            let RowData  = {};
+            let RowData0 = {};
+            let RowData1 = {};
             let prevSlots = [];
             colHeaders.forEach(colH => {
-                const cellData = dataMap.get(rowH)?.get(colH) || [];
-                let toRender = cellData;
-                if (toRender && toRender.length) {
-                    const { slots, nextPrev } = orderBySlots(toRender, prevSlots);
-                    toRender = slots.map(s => s ?? { __placeholder: true });
+                let cellData = dataMap.get(rowH)?.get(colH) || [];
+                if (isLessonPeriod && cellData && cellData.length) {
+                    const { slots, nextPrev } = orderBySlots(cellData, prevSlots);
+                    cellData = slots.map(s => s ?? { __placeholder: true });
                     prevSlots = nextPrev;
-                }
-                // レーン分割（交互に上段/下段へ）
-                const lane0 = toRender.slice(0, 1);
-                const lane1 = toRender.slice(1);
-                perColLanes[colH] = [lane0, lane1];
+                } // 連コマの生徒は横並びになるようにする
+                RowData[colH]  = cellData;
+                RowData0[colH] = cellData.slice(0, 1);
+                RowData1[colH] = cellData.slice(1) || { __placeholder: true };
             });
-            
-            // 上段
-            //左の見出し
-            tableHtml += `<tr class="table-row">` +
-                         `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`;
-            colHeaders.forEach(colH => {
-                toRender = perColLanes[colH]?.[0] || [];
-                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
-                tableHtml += `</td>`;
-            });
-            tableHtml += `</tr>`;
-            
-            // 下段（同一講師内の区切りは点線）
-            tableHtml += `<tr class="table-row instructor-block-bottom">`;
-            colHeaders.forEach(colH => {
-                toRender = perColLanes[colH]?.[1] || [];
-                tableHtml += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (toRender) tableHtml += generateCellContent(toRender, rowAttr, colAttr);
-                tableHtml += `</td>`;
-            });
-            tableHtml += `</tr>`;
+
+            if (!isLessonPeriod || isVideoEtc) 
+                tableHtml += `<tr class="table-row"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`; // 左の見出し
+                tableHtml += RenderRow (RowData); // 行本体
+                tableHtml += `</tr>`;
+            } else if {
+                // 上段
+                tableHtml += `<tr class="table-row" instructor-block-top>` +
+                             `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`; //左の見出し
+                tableHtml += RenderRow (RowData0); // 行本体
+                tableHtml += `</tr>`;
+                
+                // 下段（同一講師内の区切りは点線）
+                tableHtml += `<tr class="table-row instructor-block-bottom">`;
+                tableHtml += RenderRow (RowData1); // 行本体
+                tableHtml += `</tr>`;
+            }
         });
         
         if (colAttr === 'period') { // 力シリーズ担当講師
