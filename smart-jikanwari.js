@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (b == indv_other) {
                     return 1;
                 } else if ( videoEtcLessonTypes.indexOf(a) < 0 && videoEtcLessonTypes.indexOf(b) < 0 ) {
-                    return a.localeCompare(b, 'ja');
+                    return 0;
                 } else { // 映像・学トレなどは後ろに並べる
                     return videoEtcLessonTypes.indexOf(a) - videoEtcLessonTypes.indexOf(b);
                 }
@@ -531,11 +531,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        const RenderRow = (RowData) => {
+        const RenderRow = (RowData, erow) => {
             let retVal = '';
             colHeaders.forEach(colH => {
                 retVal += `<td class="table-cell" data-timeslot-col="${escapeHTML(colH)}" data-row-key="${erow}">`;
-                if (RowData[colH];) retVal += generateCellContent(RowData[colH];, rowAttr, colAttr);
+                if (RowData[colH]) retVal += generateCellContent(RowData[colH], rowAttr, colAttr);
                 retVal += `</td>`;
             });
             return retVal;
@@ -560,23 +560,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 } // 連コマの生徒は横並びになるようにする
                 RowData[colH]  = cellData;
                 RowData0[colH] = cellData.slice(0, 1);
-                RowData1[colH] = cellData.slice(1) || { __placeholder: true };
+                RowData1[colH] = cellData.slice(1);
+                if (RowData1[colH].length == 0) RowData1[colH] = [{ __placeholder: true }];
             });
 
-            if (!isLessonPeriod || isVideoEtc) 
+            if (!isLessonPeriod || isVideoEtc) {
                 tableHtml += `<tr class="table-row"><th scope="row" class="table-side" data-row-key="${erow}">${erow}</th>`; // 左の見出し
-                tableHtml += RenderRow (RowData); // 行本体
+                tableHtml += RenderRow (RowData, erow); // 行本体
                 tableHtml += `</tr>`;
-            } else if {
+            } else {
                 // 上段
                 tableHtml += `<tr class="table-row" instructor-block-top>` +
                              `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`; //左の見出し
-                tableHtml += RenderRow (RowData0); // 行本体
+                tableHtml += RenderRow (RowData0, erow); // 行本体
                 tableHtml += `</tr>`;
                 
                 // 下段（同一講師内の区切りは点線）
                 tableHtml += `<tr class="table-row instructor-block-bottom">`;
-                tableHtml += RenderRow (RowData1); // 行本体
+                tableHtml += RenderRow (RowData1, erow); // 行本体
                 tableHtml += `</tr>`;
             }
         });
