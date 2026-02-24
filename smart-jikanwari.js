@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const line1Parts = line1.trim().split(/\s+/).filter(p => p); // 学年と生徒氏名
             const line2Parts = line2.trim().split(/\s+/).filter(p => p); // 科目と「個」（とアイコン）
-            const line3Parts = line3.trim().split(/\s/).map(p => {if (p) {return p} else {return ''}}); // アイコンと講師とメモ
+            const line3Parts = line3.trim().split(/\s/); // アイコンと講師とメモ
             
             if (line1Parts.length != 2) { // line1には学年と生徒氏名が必要
                 return { // 想定外の入力でも何かしら返す
@@ -183,7 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let j = 0;
             while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
             const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
-            if (j=0) j=1;
             const instructor = line3Parts[j] || indv_other;
             const memo  = line3Parts.slice(j+1).filter(Boolean);
             if (memo.length > 0) memoExist = true;
