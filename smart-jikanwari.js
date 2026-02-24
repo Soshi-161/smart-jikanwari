@@ -183,7 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
             let j = 0;
             while (j < line3Parts.length && Object.keys(knownIcons).indexOf(line3Parts[j]) >= 0) j++; // line3Partsのjより前はアイコン
             const iconsFromLine3 = line3Parts.slice(0, j).map( s => `<span class="border border-gray-400">${knownIcons[s]}</span>` );
-            const instructor = line3Parts[j] || indv_other;
+            let instructor = '';
+            if (line3Parts[j] && line3.includes(' ' + line3Parts[j]) ) {
+                instructor = line3Parts[j];
+            } else {
+                instructor = indv_other;
+                j--;
+            }
             const memo  = line3Parts.slice(j+1).filter(Boolean);
             if (memo.length > 0) memoExist = true;
             
@@ -212,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (mode == 'video') { // 映像・学トレなど
                 if (isStudentLine(trimmedLine)) { // 生徒: parseVideoStudent()でオブジェクトに整形し、schedule[]にいれる
-                    const rec = parseVideoStudent(trimmedLine);
+                    const rec = parseVideoStudent(lines[i]);
                     if (rec) schedule.push(rec);
                 } else if ( !(trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) ) { // 力シリーズ担当講師
                     const key = `${currentTimeslot}（${currentTime}）`;
@@ -223,18 +229,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     continue; // ToDo: 想定外の入力でも何か返す
                 }
                 
-                let line1 = trimmedLine;
+                let line1 = lines[i];
                 let line2 = '';
                 let line3 = '';
                 
                 // linesにまだ行があり、特殊な行でなければline2, line3に追加する
                 if (i + 1 < lines.length) {
-                    line2 = lines[i + 1].trim();
-                    if ( isTimeslotLetter(line2) || isTimeRange(line2) || isHeader(line2) || isSectionVideo(line2) || isSectionIndividual(line2) || isStudentLine(line2) ) {
+                    line2 = lines[i + 1];
+                    trimmedLine2 = line2.trim();
+                    if ( isTimeslotLetter(trimmedLine2) || isTimeRange(trimmedLine2) || isHeader(trimmedLine2) || isSectionVideo(trimmedLine2) || isSectionIndividual(trimmedLine2) || isStudentLine(trimmedLine2) ) {
                         line2 = '';
                     } else if (i + 2 < lines.length) {
-                        line3 = lines[i + 2].trim();
-                        if ( isTimeslotLetter(line3) || isTimeRange(line3) || isHeader(line3) || isSectionVideo(line3) || isSectionIndividual(line3) || isStudentLine(line3) ) {
+                        line3 = lines[i + 2]
+                        trimmedLine3 = line3.trim();
+                        if ( isTimeslotLetter(trimmedLine3) || isTimeRange(trimmedLine3) || isHeader(trimmedLine3) || isSectionVideo(trimmedLine3) || isSectionIndividual(trimmedLine3) || isStudentLine(trimmedLine3) ) {
                             line3 = '';
                         } 
                     }
@@ -250,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else if (mode == 'additional') { // 追記
                 const timeslotMap = {A: 'A（13:30 〜 14:30）', B: 'B（14:40 〜 15:40）', C: 'C（15:50 〜 16:50）', D: 'D（17:00 〜 18:00）', E: 'E（18:10 〜 19:10）', F: 'F（19:20 〜 20:20）', G: 'G（20:30 〜 21:30）'};
-                const parts = trimmedLine.trim().split(/\s+/).filter(Boolean);
+                const parts = trimmedLine.split(/\s+/).filter(Boolean);
                 let currentTimeslot = '', instructor = '', content = '';
                 if (isTimeslotLetter(parts[0])) {
                     currentTimeslot = parts[0];
