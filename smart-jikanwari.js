@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const line1Parts = line1.trim().split(/\s+/).filter(p => p); // 学年と生徒氏名
             const line2Parts = line2.trim().split(/\s+/).filter(p => p); // 科目と「個」（とアイコン）
-            const line3Parts = line3.trim().split(/\s/); // アイコンと講師とメモ
+            const line3Parts = line3.trim().split(/\s+/).filter(p => p); // アイコンと講師とメモ
             
             if (line1Parts.length != 2) { // line1には学年と生徒氏名が必要
                 return { // 想定外の入力でも何かしら返す
