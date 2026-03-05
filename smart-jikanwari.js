@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let additionalScheduleData = [];
     let videoInstructorByTimeslot = new Map();
     let memoExist = false;
+    let memoExistsInRow = false;
     let currentView = 'table';
     let selectedStudent = null;
     let selectedTimeslot = null;
@@ -377,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let visibleParts = parts.filter(p => p.value && p.key !== rowAttr && p.key !== colAttr);
             if (item.icon) visibleParts[1].value += ` <span class="text-icon">${item.icon}</span>`;
-            if (!memoExist) { // メモが一つでもある場合はメモを表示
+            if (!memoExistsInRow) { // メモが一つでもある場合はメモを表示
                 visibleParts = visibleParts.filter(p => p.key !== 'memo');
             }
             let infoHtml = visibleParts.map((p, i) => {
@@ -538,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableHtml += `<td class="table-cell h-[7em]" data-timeslot-col="${escapeHTML(colH)}"></td>`;
             });
         }
-
+        
         const RenderRow = (RowData, erow) => {
             let retVal = '';
             colHeaders.forEach(colH => {
@@ -554,13 +555,21 @@ document.addEventListener('DOMContentLoaded', () => {
             // 学トレ/映像授業/力シリーズなど（映像・学トレ系）はセル分割対象外
             const isLessonPeriod = (rowAttr === 'lesson' && colAttr === 'period');
             const isVideoEtc = videoEtcLessonTypes.indexOf(rowH) >= 0;
-
+            
+            memoExistsInRow = false;
             let RowData  = {};
             let RowData0 = {};
             let RowData1 = {};
             let prevSlots = [];
             colHeaders.forEach(colH => {
                 let cellData = dataMap.get(rowH)?.get(colH) || [];
+                
+                if (memoExist) { // 行にメモが一つでもあるか
+                    for (let item of cellData) {
+                        if (item.memo.length > 0) memoExistsInRow = true;
+                    }
+                }
+                
                 if (isLessonPeriod && cellData && cellData.length) {
                     const { slots, nextPrev } = orderBySlots(cellData, prevSlots);
                     cellData = slots.map(s => s ?? { __placeholder: true });
