@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAdditional = (s) => (s == '追記');
         const isStudentLine = (s) => /^((小|中|高)[1-6１-６]|高卒|年少|年中|年長)/.test(s);
         
-        const knownIcons = {'出席': '出', '欠席': '欠', '追加受講': '追', '振替': '振', 'SNET振替': '振', '講習会': '講', 'マンツーマン': '１', '有効時限': '有', '重要': '重'};
+        const knownIcons = {'出席': '出', '欠席': '欠', '追加受講': '追', '振替': '振', 'SNET振替': '振', '生徒振替': '振', '講習会': '講', 'マンツーマン': '１', '有効時限': '有', '重要': '重'};
         
         const parseVideoStudent = (line) => {
             const timeslotInfo = `${currentTimeslot}（${currentTime}）`; // 時限
