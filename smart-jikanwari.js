@@ -587,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableHtml += `</tr>`;
             } else {
                 // 上段
-                tableHtml += `<tr class="table-row" instructor-block-top>` +
+                tableHtml += `<tr class="table-row instructor-block-top">` +
                              `<th scope="row" class="table-side" data-row-key="${erow}" rowspan="2">${erow}</th>`; //左の見出し
                 tableHtml += RenderRow (RowData0, erow); // 行本体
                 tableHtml += `</tr>`;
