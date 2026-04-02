@@ -133,11 +133,11 @@
             }
             
             .text-lesson {
-                @apply text-gray-600;
+                @apply text-gray-800;
             }
             
             .text-period {
-                @apply text-sm text-gray-600;
+                @apply text-sm text-gray-800;
             }
             
             .text-icon {
@@ -145,7 +145,7 @@
             }
             
             .text-memo {
-                @apply text-xs text-red-500 font-semibold;
+                @apply text-xs text-gray-800 font-semibold;
             }
             
             .text-memo-table {
@@ -159,8 +159,14 @@
         }
     </style>
     <style>
+        @font-face {
+            font-family: 'selected BIZ UDP';
+            src: local('BIZ UDPGothic');
+            unicode-range: U+0021-007E;
+        }
+        
         body {
-            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            font-family: 'selected BIZ UDP', 'BIZ UDGothic', 'Meiryo UI', Meiryo, 'メイリオ', sans-serif;
         }
         
         @media not print {
@@ -226,10 +232,6 @@
                 --border-color-science: #888;
                 --border-color-social: #444;
                 --border-color-other: #666;
-            }
-            
-            :root .text-memo {
-                color: unset;
             }
         }
         @page {
