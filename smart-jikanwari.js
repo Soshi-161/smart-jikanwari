@@ -249,7 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             let line2Parts = line2.trim().split(/\s+/).filter(p => p);
                             let line3Parts = line3.trim().split(/\s+/).filter(p => p);
 
-                            line2 = line2Parts.splice(1, 0, line3Parts[0]).concat(line3Parts.slice(1)).join(" ");
+                            line2Parts[0] = line2Parts[0] + '・' + line3Parts[0];
+                            line2 = line2Parts.concat(line3Parts.slice(1)).join(' ');
                             
                             line3 = lines[i + 3];
                             i++;
