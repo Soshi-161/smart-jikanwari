@@ -241,11 +241,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if ( isTimeslotLetter(trimmedLine2) || isTimeRange(trimmedLine2) || isHeader(trimmedLine2) || isSectionVideo(trimmedLine2) || isSectionIndividual(trimmedLine2) || isStudentLine(trimmedLine2) ) {
                         line2 = '';
                     } else if (i + 2 < lines.length) {
-                        line3 = lines[i + 2]
+                        line3 = lines[i + 2];
                         trimmedLine3 = line3.trim();
                         if ( isTimeslotLetter(trimmedLine3) || isTimeRange(trimmedLine3) || isHeader(trimmedLine3) || isSectionVideo(trimmedLine3) || isSectionIndividual(trimmedLine3) || isStudentLine(trimmedLine3) ) {
                             line3 = '';
-                        } 
+                        } else if (/\s個$/.test(line3)) {
+                            let line2Parts = line2.trim().split(/\s+/).filter(p => p);
+                            let line3Parts = line3.trim().split(/\s+/).filter(p => p);
+
+                            line2 = line2Parts.splice(1, 0, line3Parts[0]).concat(line3Parts.slice(1)).join(" ");
+                            
+                            line3 = lines[i + 3];
+                            i++;
+                        }
                     }
                 }
                 
